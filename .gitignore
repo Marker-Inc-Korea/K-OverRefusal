@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 *.pyo
 *.pyd
+*.so
 
 # uv / virtualenv
 .venv/
@@ -19,6 +20,19 @@ uv.lock
 
 # Jupyter notebooks
 *.ipynb
+.ipynb_checkpoints/
+
+# Testing & coverage
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Type checking / linting caches
+.mypy_cache/
+.ruff_cache/
+.pytype/
 
 # Log / error / output files
 *.log
@@ -45,10 +59,20 @@ dataset/test/*
 # Outputs
 outputs/
 
+# ML experiment tracking
+wandb/
+mlruns/
+
 # Temporary files
 temp.py
 temp/
 
+# IDE
+.idea/
+.vscode/
+
 # OS
 .DS_Store
 Thumbs.db
+*.swp
+*.swo
