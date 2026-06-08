@@ -1,0 +1,54 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+
+# uv / virtualenv
+.venv/
+venv/
+env/
+.env
+.env.*
+*.egg-info/
+dist/
+build/
+.uv/
+uv.lock
+
+# Jupyter notebooks
+*.ipynb
+
+# Log / error / output files
+*.log
+*.err
+*.out
+
+# Batch scripts
+batch_scripts/
+
+# Shell scripts
+scripts/
+
+# Legacy files and folders
+**/legacy_*/
+**/legacy*/
+
+# Dataset: xstest
+dataset/xstest/
+
+# Dataset: test folder — only keep final_dataset.jsonl
+dataset/test/*
+!dataset/test/final_dataset.jsonl
+
+# Outputs
+outputs/
+
+# Temporary files
+temp.py
+temp/
+
+# OS
+.DS_Store
+Thumbs.db
