@@ -68,3 +68,6 @@ seed_word.csv (pseudo-harmful 표현 목록)
 ## 상태
 
 현재 데이터셋 구축 및 검증 단계이며, 아직 완성된 벤치마크가 아닙니다.
+
+## TODO 0611
+Evaluation Prompt 수정 및 정확도 향상
