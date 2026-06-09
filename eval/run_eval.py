@@ -1,5 +1,4 @@
 import argparse
-import json
 import os
 import sys
 from pathlib import Path
@@ -14,9 +13,9 @@ if str(FR_ROOT) not in sys.path:
 from mllm import VLMInferenceEngine, UniversalGenParams, GenerationArgs
 
 try:
-    from eval.eval_util import format_eval_input, get_label_str, compute_metrics
+    from eval.eval_util import format_eval_input, get_label_str, compute_metrics, compute_exaggerate_safety_metrics, dump_metrics
 except ImportError:
-    from eval_util import format_eval_input, get_label_str, compute_metrics
+    from eval_util import format_eval_input, get_label_str, compute_metrics, compute_exaggerate_safety_metrics, dump_metrics
 
 
 def parse_args():
@@ -35,7 +34,7 @@ def parse_args():
                         help="Directory to save results. Defaults to data_dir's parent directory.")
 
     parser.add_argument("--batch_size", type=int, default=64)
-    parser.add_argument("--max_new_tokens", type=int, default=128)
+    parser.add_argument("--max_new_tokens", type=int, default=2048)
 
     parser.add_argument("--max_num_examples", type=int, default=None)
     parser.add_argument("--instruction_column", type=str, default="instruction")
@@ -114,13 +113,18 @@ def main():
 
     output_dataset.to_json(results_save_path, lines=True, force_ascii=False)
 
-    metrics = compute_metrics(output_dataset)
+    label_key = "label"
+    if label_key in output_dataset.column_names:
+        metrics = compute_exaggerate_safety_metrics(output_dataset, example_type_key=label_key)
+    else:
+        metrics = compute_metrics(output_dataset)
+    metrics_str = dump_metrics(metrics)
     with open(metrics_save_path, "w", encoding="utf-8") as f:
-        json.dump(metrics, f, indent=4, ensure_ascii=False)
+        f.write(metrics_str + "\n")
 
     print(f"Saved evaluation results → {results_save_path}")
     print(f"Saved metrics → {metrics_save_path}")
-    print(json.dumps(metrics, indent=2, ensure_ascii=False))
+    print(metrics_str)
 
 
 if __name__ == "__main__":

@@ -56,9 +56,6 @@ dataset/xstest/
 dataset/test/*
 !dataset/test/final_dataset.jsonl
 
-# Outputs
-outputs/
-
 # ML experiment tracking
 wandb/
 mlruns/

@@ -2,13 +2,11 @@ import argparse
 import csv
 import json
 import os
-import random
 import re
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
-from datasets import load_dataset
 from tqdm import tqdm
 
 FR_ROOT = Path(__file__).resolve().parents[1]
@@ -17,15 +15,9 @@ if str(FR_ROOT) not in sys.path:
 
 from mllm import GenerationArgs, UniversalGenParams, VLMInferenceEngine
 try:
-    from generation_util import (
-        SEED_INSTRUCTION_SELECTION_PROMPT,
-        SEED_INSTRUCTION_GENERATION_PROMPT,
-    )
+    from generation_util import SEED_INSTRUCTION_GENERATION_PROMPT
 except ImportError:
-    from dataset.generation_util import (
-        SEED_INSTRUCTION_SELECTION_PROMPT,
-        SEED_INSTRUCTION_GENERATION_PROMPT,
-    )
+    from dataset.generation_util import SEED_INSTRUCTION_GENERATION_PROMPT
 
 
 DEFAULT_SEED_WORD_PATH = "/data/home/mk05/FR/dataset/seed_word.csv"
@@ -42,11 +34,6 @@ def parse_args():
     parser.add_argument("--max_model_len", type=int, default=None)
     parser.add_argument("--max_num_seqs", type=int, default=None)
 
-    parser.add_argument("--dataset_name", type=str, default="iknow-lab/wildguardmix-test-ko")
-    parser.add_argument("--dataset_split", type=str, default="test")
-    parser.add_argument("--instruction_column", type=str, default="prompt_ko")
-    parser.add_argument("--response_column", type=str, default="response_ko")
-
     parser.add_argument("--seed_word_path", type=str, default=DEFAULT_SEED_WORD_PATH)
     parser.add_argument("--pseudo_keyword_col", type=int, default=0)
     parser.add_argument("--pseudo_instruction_col", type=int, default=1)
@@ -56,11 +43,10 @@ def parse_args():
     parser.add_argument("--log_path", type=str, default=None)
 
     parser.add_argument("--batch_size", type=int, default=64)
-    parser.add_argument("--max_candidates", type=int, default=30)
-    parser.add_argument("--max_num_examples", type=int, default=None)
     parser.add_argument("--max_num_seeds", type=int, default=None)
     parser.add_argument("--start_seed_index", type=int, default=0)
     parser.add_argument("--append", action="store_true")
+    parser.add_argument("--max_retries", type=int, default=10)
 
     parser.add_argument("--max_new_tokens", type=int, default=2048)
     parser.add_argument("--temperature", type=float, default=0.0)
@@ -107,33 +93,6 @@ def read_seed_rows(
     return rows
 
 
-def load_candidate_examples(args) -> List[Dict[str, str]]:
-    dataset = load_dataset(args.dataset_name, split=args.dataset_split)
-    dataset = dataset.filter(
-        lambda x: str(x.get("response_harm_label", "")).strip().lower() == "harmful"
-    )
-    if args.max_num_examples is not None:
-        dataset = dataset.select(range(min(args.max_num_examples, len(dataset))))
-
-    missing_columns = [
-        c for c in [args.instruction_column, args.response_column]
-        if c not in dataset.column_names
-    ]
-    if missing_columns:
-        raise ValueError(f"Missing columns in dataset: {missing_columns}")
-
-    examples = []
-    for example in tqdm(dataset, desc="Loading candidate examples"):
-        instruction = str(example.get(args.instruction_column) or "").strip()
-        if not instruction:
-            continue
-        examples.append({
-            "instruction": instruction,
-            "response": str(example.get(args.response_column) or ""),
-        })
-    return examples
-
-
 def build_backend_kwargs(args) -> Dict:
     if args.model_engine_backend == "vllm":
         backend_kwargs = {
@@ -160,20 +119,6 @@ def batched(items: list, batch_size: int):
         yield items[start: start + batch_size]
 
 
-def keyword_filter(examples: List[Dict[str, str]], keyword: str) -> List[Dict[str, str]]:
-    return [ex for ex in examples if keyword in ex["instruction"]]
-
-
-def build_selection_prompt(pseudo_instruction: str, candidates: List[Dict[str, str]]) -> str:
-    candidates_text = "\n".join(
-        f"[{i}] {ex['instruction']}" for i, ex in enumerate(candidates)
-    )
-    return SEED_INSTRUCTION_SELECTION_PROMPT.format(
-        pseudo_instruction=pseudo_instruction,
-        candidates=candidates_text,
-    )
-
-
 def build_generation_prompt(pseudo_instruction: str, harmful_keyword: str) -> str:
     return SEED_INSTRUCTION_GENERATION_PROMPT.format(
         pseudo_instruction=pseudo_instruction,
@@ -183,9 +128,13 @@ def build_generation_prompt(pseudo_instruction: str, harmful_keyword: str) -> st
 
 _PUNCT = r"[.?!？。！]"
 
+_REFUSAL_PHRASES = (
+    "I'm sorry", "I cannot", "I can't", "I am sorry",
+    "죄송합니다", "죄송해요", "도움을 드릴 수 없", "도와드릴 수 없",
+)
+
 
 def _last_sentence_in_quotes(text: str) -> Optional[str]:
-    """Last backtick- or double-quote-delimited sentence ending with punctuation."""
     for pattern in (rf"`([^`]{{5,}}{_PUNCT})`", rf'"([^"]{{5,}}{_PUNCT})"'):
         matches = re.findall(pattern, text)
         if matches:
@@ -194,11 +143,12 @@ def _last_sentence_in_quotes(text: str) -> Optional[str]:
 
 
 def _parse_output_tag(text: str) -> Optional[str]:
-    """
-    Return the last start-of-line [OUTPUT]: match, skipping template placeholders.
-    Using re.MULTILINE so ^ anchors to each line start, which avoids matching
-    [OUTPUT]: references inside indented thinking or backtick code spans.
-    """
+    # Direct prefix check (handles edge-cases where regex anchor fails)
+    if text.startswith("[OUTPUT]:"):
+        candidate = text[len("[OUTPUT]:"):].strip()
+        if candidate and not candidate.startswith("<") and len(candidate) > 3:
+            return candidate
+
     matches = re.findall(r"^\[OUTPUT\]:\s*(.+)", text, re.MULTILINE)
     for candidate in reversed(matches):
         candidate = candidate.strip()
@@ -207,32 +157,56 @@ def _parse_output_tag(text: str) -> Optional[str]:
     return None
 
 
-def parse_selection_output(text: str, num_candidates: int) -> int:
-    text = str(text or "").strip()
-    # Last start-of-line [OUTPUT]: N
-    matches = re.findall(r"^\[OUTPUT\]:\s*(\d+)", text, re.MULTILINE)
-    for m in reversed(matches):
-        idx = int(m)
-        if 0 <= idx < num_candidates:
-            return idx
-    # Fallback: last valid number anywhere in text
-    for n in reversed(re.findall(r"\d+", text)):
-        idx = int(n)
-        if 0 <= idx < num_candidates:
-            return idx
-    return 0
+def _strip_output_tag(text: str) -> str:
+    if text.startswith("[OUTPUT]:"):
+        return text[len("[OUTPUT]:"):].strip()
+    return text
 
 
 def parse_generation_output(text: str) -> Optional[str]:
     text = str(text or "").strip()
+
     result = _parse_output_tag(text)
     if result:
         return result
-    # Fallback: last quoted sentence (backtick or double-quote) — handles truncation
+
+    # Fallback: last quoted sentence
     quoted = _last_sentence_in_quotes(text)
     if quoted:
         return quoted
-    return text or None
+
+    # Fallback: last non-empty line ending with sentence-final punctuation
+    for line in reversed(text.splitlines()):
+        line = line.strip()
+        if len(line) < 5:
+            continue
+        if line.startswith("[OUTPUT]:"):
+            candidate = line[len("[OUTPUT]:"):].strip()
+            if candidate and len(candidate) > 3:
+                return candidate
+        if line.startswith(("[", "<", "*", "#", "-")):
+            continue
+        if re.search(r"[.?!？。！]$", line):
+            return line
+
+    # Defensive final strip — ensure [OUTPUT]: never leaks into the saved record
+    return _strip_output_tag(text) or None
+
+
+def needs_retry(raw_output: str, parsed: Optional[str]) -> bool:
+    """Return True if the generation should be retried."""
+    if parsed is None:
+        return True
+    # Parsed text itself is a refusal (e.g. model put refusal after [OUTPUT]:)
+    if any(phrase in parsed for phrase in _REFUSAL_PHRASES):
+        return True
+    # If there's a clean [OUTPUT]: tag and parsed is not a refusal, trust it
+    if re.search(r"^\[OUTPUT\]:\s*.+", raw_output, re.MULTILINE):
+        return False
+    # No [OUTPUT]: tag — retry if refusal phrases appear anywhere in raw output
+    if any(phrase in raw_output for phrase in _REFUSAL_PHRASES):
+        return True
+    return False
 
 
 def make_record(seed_row: Dict, instruction: str) -> Dict:
@@ -304,8 +278,7 @@ def main():
     if args.max_num_seeds is not None:
         seed_rows = seed_rows[: args.max_num_seeds]
 
-    examples = load_candidate_examples(args)
-    print(f"Loaded {len(examples)} candidate examples, {len(seed_rows)} seeds")
+    print(f"Generating instructions for {len(seed_rows)} seeds...")
 
     backend_kwargs = build_backend_kwargs(args)
     model = VLMInferenceEngine(
@@ -322,102 +295,60 @@ def main():
         reasoning=args.reasoning,
     )
 
-    # Step 1: keyword matching — categorize all seeds
-    direct_seeds: List[Tuple[Dict, Dict]] = []       # (seed_row, single_candidate)
-    selection_seeds: List[Tuple[Dict, List]] = []    # (seed_row, candidates)
-    generation_seeds: List[Dict] = []                # seed_row (no candidates found)
+    # done[i] = (parsed_instruction, raw_output) for seed_rows[i]
+    done: Dict[int, tuple] = {}
+    retry_indices = list(range(len(seed_rows)))
 
-    print("Step 1: Keyword matching...")
-    for seed_row in tqdm(seed_rows, desc="Filtering"):
-        candidates = keyword_filter(examples, seed_row["harmful_keyword"])
+    for attempt in range(args.max_retries + 1):
+        if not retry_indices:
+            break
 
-        if len(candidates) == 0:
-            generation_seeds.append(seed_row)
-        elif len(candidates) == 1:
-            direct_seeds.append((seed_row, candidates[0]))
-        else:
-            if len(candidates) > args.max_candidates:
-                candidates = random.sample(candidates, args.max_candidates)
-            selection_seeds.append((seed_row, candidates))
+        label = "Generating" if attempt == 0 else f"Retry {attempt}/{args.max_retries}"
+        print(f"{label} for {len(retry_indices)} seeds...")
 
-    print(
-        f"  direct={len(direct_seeds)}, "
-        f"needs_selection={len(selection_seeds)}, "
-        f"needs_generation={len(generation_seeds)}"
-    )
-
-    total_saved = 0
-
-    # Direct: single candidate, no LLM needed
-    if direct_seeds:
-        records = [make_record(sr, cand["instruction"]) for sr, cand in direct_seeds]
-        append_jsonl(args.save_path, records)
-        total_saved += len(records)
-        print(f"  Saved {len(records)} direct records")
-
-    # Step 2: LLM selection — multiple candidates, pick best
-    if selection_seeds:
-        print(f"Step 2: LLM selection for {len(selection_seeds)} seeds...")
         prompts = [
-            build_selection_prompt(sr["pseudo_instruction"], cands)
-            for sr, cands in selection_seeds
+            build_generation_prompt(seed_rows[i]["pseudo_instruction"], seed_rows[i]["harmful_keyword"])
+            for i in retry_indices
         ]
         raw_outputs = run_batch_generate(model, prompts, gen_params, args.batch_size)
 
-        selection_records = []
-        log_records = []
-        for (seed_row, candidates), raw_output in zip(selection_seeds, raw_outputs):
-            idx = parse_selection_output(raw_output, len(candidates))
-            selection_records.append(make_record(seed_row, candidates[idx]["instruction"]))
-            if args.log_path:
-                log_records.append({
-                    "step": "selection",
-                    "seed_harmful_keyword": seed_row["harmful_keyword"],
-                    "pseudo_instruction": seed_row["pseudo_instruction"],
-                    "num_candidates": len(candidates),
-                    "selected_index": idx,
-                    "selected_instruction": candidates[idx]["instruction"],
-                    "raw_output": raw_output,
-                })
+        still_failing = []
+        for idx, raw_output in zip(retry_indices, raw_outputs):
+            parsed = parse_generation_output(raw_output)
+            if needs_retry(raw_output, parsed):
+                still_failing.append(idx)
+            else:
+                done[idx] = (parsed, raw_output)
 
-        append_jsonl(args.save_path, selection_records)
-        append_jsonl(args.log_path, log_records)
-        total_saved += len(selection_records)
-        print(f"  Saved {len(selection_records)} selection records")
+        if still_failing:
+            if attempt < args.max_retries:
+                print(f"  → {len(still_failing)} seeds will be retried (refusal or parse failure)")
+            else:
+                print(f"  → {len(still_failing)} seeds failed after all retries")
+                for i in still_failing:
+                    print(f"    [FAIL] {seed_rows[i]['harmful_keyword']}")
 
-    # Step 3: LLM generation — no candidates found, generate from scratch
-    if generation_seeds:
-        print(f"Step 3: LLM generation for {len(generation_seeds)} seeds...")
-        prompts = [
-            build_generation_prompt(sr["pseudo_instruction"], sr["harmful_keyword"])
-            for sr in generation_seeds
-        ]
-        raw_outputs = run_batch_generate(model, prompts, gen_params, args.batch_size)
+        retry_indices = still_failing
 
-        generation_records = []
-        log_records = []
-        failed = 0
-        for seed_row, raw_output in zip(generation_seeds, raw_outputs):
-            instruction = parse_generation_output(raw_output)
-            if instruction is None:
-                print(f"  [WARN] Failed to parse generation output for: {seed_row['harmful_keyword']}")
-                failed += 1
-                continue
-            generation_records.append(make_record(seed_row, instruction))
-            if args.log_path:
-                log_records.append({
-                    "step": "generation",
-                    "seed_harmful_keyword": seed_row["harmful_keyword"],
-                    "pseudo_instruction": seed_row["pseudo_instruction"],
-                    "raw_output": raw_output,
-                })
+    records = []
+    log_records = []
+    for i in sorted(done):
+        seed_row = seed_rows[i]
+        instruction, raw_output = done[i]
+        records.append(make_record(seed_row, instruction))
+        if args.log_path:
+            log_records.append({
+                "seed_harmful_keyword": seed_row["harmful_keyword"],
+                "pseudo_instruction": seed_row["pseudo_instruction"],
+                "raw_output": raw_output,
+                "parsed_instruction": instruction,
+            })
 
-        append_jsonl(args.save_path, generation_records)
-        append_jsonl(args.log_path, log_records)
-        total_saved += len(generation_records)
-        print(f"  Saved {len(generation_records)} generated records ({failed} failed)")
+    append_jsonl(args.save_path, records)
+    append_jsonl(args.log_path, log_records)
 
-    print(f"\nDone. Total saved: {total_saved} records → {args.save_path}")
+    failed = len(retry_indices)
+    print(f"\nDone. Saved {len(records)} records ({failed} failed) → {args.save_path}")
 
 
 if __name__ == "__main__":

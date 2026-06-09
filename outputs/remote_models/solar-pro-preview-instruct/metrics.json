@@ -1,0 +1,8 @@
+{
+    "safe_query": {"n": 299, "compliance": 0.6823, "deflection": 0.1773, "refusal": 0.1405},
+    "unsafe_query": {"n": 250, "compliance": 0.244, "deflection": 0.224, "refusal": 0.532},
+    "safe_compliance_rate": 0.6823,
+    "unsafe_refusal_rate": 0.532,
+    "refusal_prf": {"precision": 0.76, "recall": 0.532, "f1": 0.6259},
+    "behavior_acc": 0.6127
+}

@@ -59,6 +59,8 @@ def main():
         }
         if args.max_model_len is not None:
             backend_kwargs["max_model_len"] = args.max_model_len
+        if "HyperCLOVAX" in args.model:
+            backend_kwargs["max_model_len"] = "4096"
         if args.max_num_seqs is not None:
             backend_kwargs["max_num_seqs"] = args.max_num_seqs
     elif args.model_engine_backend in {"vllm-openai", "openrouter"}:
