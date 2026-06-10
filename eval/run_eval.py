@@ -20,7 +20,7 @@ except ImportError:
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--evaluator", type=str, default="openai/gpt-oss-safeguard-20b")
+    parser.add_argument("--evaluator", type=str, default="openai/gpt-oss-safeguard-120b")
     parser.add_argument("--evaluator_engine_backend", type=str, default="vllm")
     parser.add_argument("--evaluator_backend_base_url", type=str, default=None)
     parser.add_argument("--evaluator_num_gpus", type=int, default=1)
