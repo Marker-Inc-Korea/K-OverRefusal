@@ -1,19 +1,10 @@
 {
-    "num_refusals": 37,
-    "num_deflections": 167,
-    "num_compliances": 346,
-    "num_unclassified": 0,
-    "num_total": 550,
-    "false_refusal_rate": 0.06727272727272728,
-    "deflection_rate": 0.30363636363636365,
-    "compliance_rate": 0.6290909090909091,
-    "unclassified_rate": 0.0,
-    "safe_query": {"n": 300, "compliance": 0.93, "deflection": 0.0633, "refusal": 0.0067},
-    "unsafe_query": {"n": 250, "compliance": 0.268, "deflection": 0.592, "refusal": 0.14},
-    "safe_compliance_rate": 0.93,
-    "unsafe_refusal_rate": 0.14,
-    "refusal_prf": {"precision": 0.9459, "recall": 0.14, "f1": 0.2439},
-    "behavior_acc": 0.5709,
-    "k_idioms": {"safe_query": {"n": 50, "compliance": 0.72, "deflection": 0.28, "refusal": 0.0}, "unsafe_query": {"n": 50, "compliance": 0.24, "deflection": 0.56, "refusal": 0.2}, "safe_compliance_rate": 0.72, "unsafe_refusal_rate": 0.2, "refusal_prf": {"precision": 1.0, "recall": 0.2, "f1": 0.3333}, "behavior_acc": 0.46},
-    "xstest": {"safe_query": {"n": 250, "compliance": 0.972, "deflection": 0.02, "refusal": 0.008}, "unsafe_query": {"n": 200, "compliance": 0.275, "deflection": 0.6, "refusal": 0.125}, "safe_compliance_rate": 0.972, "unsafe_refusal_rate": 0.125, "refusal_prf": {"precision": 0.9259, "recall": 0.125, "f1": 0.2203}, "behavior_acc": 0.5956}
+    "safe_query": {"n": 300, "compliance": 0.9367, "deflection": 0.0133, "refusal": 0.05},
+    "unsafe_query": {"n": 248, "compliance": 0.2782, "deflection": 0.125, "refusal": 0.5968},
+    "safe_compliance_rate": 0.9367,
+    "unsafe_refusal_rate": 0.5968,
+    "refusal_prf": {"precision": 0.908, "recall": 0.5968, "f1": 0.7202},
+    "behavior_acc": 0.7828,
+    "k_idioms": {"safe_query": {"n": 50, "compliance": 0.78, "deflection": 0.06, "refusal": 0.16}, "unsafe_query": {"n": 50, "compliance": 0.26, "deflection": 0.1, "refusal": 0.64}, "safe_compliance_rate": 0.78, "unsafe_refusal_rate": 0.64, "refusal_prf": {"precision": 0.8, "recall": 0.64, "f1": 0.7111}, "behavior_acc": 0.71},
+    "xstest": {"safe_query": {"n": 250, "compliance": 0.968, "deflection": 0.004, "refusal": 0.028}, "unsafe_query": {"n": 198, "compliance": 0.2828, "deflection": 0.1313, "refusal": 0.5859}, "safe_compliance_rate": 0.968, "unsafe_refusal_rate": 0.5859, "refusal_prf": {"precision": 0.9431, "recall": 0.5859, "f1": 0.7227}, "behavior_acc": 0.7991}
 }
