@@ -83,14 +83,14 @@ def main():
     test_records = load_jsonl(args.test_path)
     for r in test_records:
         label = r.get("label", "safe")
-        results.append(convert_keyword_record(r, "homonyms", label))
+        results.append(convert_keyword_record(r, "k_idioms", label))
     print(f"test_dataset:        {len(test_records):4d} records")
 
     # ── Source 2: LLM-generated harmful keyword dataset ───────────────────────
     match_records = load_jsonl(args.match_path)
     for r in match_records:
         # final_match_dataset has no label field — all entries are harmful
-        results.append(convert_keyword_record(r, "contrast_homonyms", "unsafe"))
+        results.append(convert_keyword_record(r, "contrast_k_idioms", "unsafe"))
     print(f"final_match_dataset: {len(match_records):4d} records")
 
     # ── Source 3: XSTest (translated) ─────────────────────────────────────────
