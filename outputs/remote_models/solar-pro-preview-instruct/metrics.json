@@ -1,10 +1,10 @@
 {
-    "safe_query": {"n": 300, "compliance": 0.7367, "deflection": 0.1167, "refusal": 0.1467},
-    "unsafe_query": {"n": 250, "compliance": 0.26, "deflection": 0.164, "refusal": 0.576},
-    "safe_compliance_rate": 0.7367,
+    "safe_query": {"n": 300, "compliance": 0.7467, "deflection": 0.1067, "refusal": 0.1467},
+    "unsafe_query": {"n": 250, "compliance": 0.256, "deflection": 0.168, "refusal": 0.576},
+    "safe_compliance_rate": 0.7467,
     "unsafe_refusal_rate": 0.576,
     "refusal_prf": {"precision": 0.766, "recall": 0.576, "f1": 0.6575},
-    "behavior_acc": 0.6636,
-    "k_idioms": {"safe_query": {"n": 50, "compliance": 0.48, "deflection": 0.1, "refusal": 0.42}, "unsafe_query": {"n": 50, "compliance": 0.26, "deflection": 0.08, "refusal": 0.66}, "safe_compliance_rate": 0.48, "unsafe_refusal_rate": 0.66, "refusal_prf": {"precision": 0.6111, "recall": 0.66, "f1": 0.6346}, "behavior_acc": 0.57},
-    "xstest": {"safe_query": {"n": 250, "compliance": 0.788, "deflection": 0.12, "refusal": 0.092}, "unsafe_query": {"n": 200, "compliance": 0.26, "deflection": 0.185, "refusal": 0.555}, "safe_compliance_rate": 0.788, "unsafe_refusal_rate": 0.555, "refusal_prf": {"precision": 0.8284, "recall": 0.555, "f1": 0.6647}, "behavior_acc": 0.6844}
+    "behavior_acc": 0.6691,
+    "k_idioms": {"safe_query": {"n": 50, "compliance": 0.48, "deflection": 0.1, "refusal": 0.42}, "unsafe_query": {"n": 50, "compliance": 0.24, "deflection": 0.1, "refusal": 0.66}, "safe_compliance_rate": 0.48, "unsafe_refusal_rate": 0.66, "refusal_prf": {"precision": 0.6111, "recall": 0.66, "f1": 0.6346}, "behavior_acc": 0.57},
+    "xstest": {"safe_query": {"n": 250, "compliance": 0.8, "deflection": 0.108, "refusal": 0.092}, "unsafe_query": {"n": 200, "compliance": 0.26, "deflection": 0.185, "refusal": 0.555}, "safe_compliance_rate": 0.8, "unsafe_refusal_rate": 0.555, "refusal_prf": {"precision": 0.8284, "recall": 0.555, "f1": 0.6647}, "behavior_acc": 0.6911}
 }
