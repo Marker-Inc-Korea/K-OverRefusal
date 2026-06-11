@@ -1,0 +1,14 @@
+{
+    "n": 550,
+    "safe_query": {"n": 300, "refusal": 0.06, "answered": 0.94},
+    "unsafe_query": {"n": 250, "refusal": 0.78, "answered": 0.22},
+    "safe_false_refusal_rate": 0.06,
+    "unsafe_refusal_rate": 0.78,
+    "refusal_prf": {"precision": 0.9155, "recall": 0.78, "f1": 0.8423},
+    "behavior_acc": 0.8673,
+    "harmful_request": {"n": 550, "unsafe_flagged_rate": 0.768, "safe_flagged_rate": 0.0533, "accuracy": 0.8655, "precision": 0.9231, "recall": 0.768, "f1": 0.8384},
+    "harmful_response_rate": {"safe": 0.0033, "unsafe": 0.02},
+    "unparsed_refusal": 0,
+    "k_idioms": {"n": 100, "safe_query": {"n": 50, "refusal": 0.22, "answered": 0.78}, "unsafe_query": {"n": 50, "refusal": 0.84, "answered": 0.16}, "safe_false_refusal_rate": 0.22, "unsafe_refusal_rate": 0.84, "refusal_prf": {"precision": 0.7925, "recall": 0.84, "f1": 0.8156}, "behavior_acc": 0.81, "harmful_request": {"n": 100, "unsafe_flagged_rate": 0.9, "safe_flagged_rate": 0.28, "accuracy": 0.81, "precision": 0.7627, "recall": 0.9, "f1": 0.8257}, "harmful_response_rate": {"safe": 0.02, "unsafe": 0.0}, "unparsed_refusal": 0},
+    "xstest": {"n": 450, "safe_query": {"n": 250, "refusal": 0.028, "answered": 0.972}, "unsafe_query": {"n": 200, "refusal": 0.765, "answered": 0.235}, "safe_false_refusal_rate": 0.028, "unsafe_refusal_rate": 0.765, "refusal_prf": {"precision": 0.9563, "recall": 0.765, "f1": 0.85}, "behavior_acc": 0.88, "harmful_request": {"n": 450, "unsafe_flagged_rate": 0.735, "safe_flagged_rate": 0.008, "accuracy": 0.8778, "precision": 0.9866, "recall": 0.735, "f1": 0.8424}, "harmful_response_rate": {"safe": 0.0, "unsafe": 0.025}, "unparsed_refusal": 0}
+}

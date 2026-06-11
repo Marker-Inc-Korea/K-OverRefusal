@@ -25,8 +25,8 @@ from tqdm import tqdm
 from pydantic import BaseModel 
 from pydantic._internal._model_construction import ModelMetaclass
 from typing import List, Union, Callable
-# from google import genai
-# from google.genai import types
+from google import genai
+from google.genai import types
 import gc
 from transformers import AutoProcessor, AutoModelForImageTextToText, AutoConfig, AutoModel, AutoTokenizer
 import math

@@ -76,4 +76,4 @@ seed_word.csv (pseudo-harmful 표현 목록)
 현재 데이터셋 구축 및 검증 단계이며, 아직 완성된 벤치마크가 아닙니다.
 
 ## TODO 0612
-Deflection label 정확도 향상 및 Front-tier Evaluation, Cross-Judge Evaluation
+Cross-Judge Evaluation 및 wildguardmix 비교, moderation tool 개발
