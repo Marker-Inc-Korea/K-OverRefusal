@@ -1,0 +1,14 @@
+{
+  "dataset": "bench-llm/or-bench (or-bench-hard-1k, n=1319)",
+  "note": "rejected-row translation_flags counts (a row may carry multiple flags)",
+  "gpt-oss-120b (translate+filter)": {
+    "looks_like_refusal": 963,
+    "no_hangul": 728,
+    "too_short": 248,
+    "identical_to_source": 18,
+    "llm_rejected": 2
+  },
+  "instructTrans-8b + gpt-oss-120b filter": {
+    "llm_rejected": 7
+  }
+}

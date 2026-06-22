@@ -424,16 +424,21 @@ def parse_args():
 
 
 def discover_data_files(path):
-    """Return list of (model_name, jsonl_path)."""
+    """Return list of (model_name, jsonl_path).
+
+    Outputs are laid out as <model>/<benchmark>/inference_outputs.jsonl, so when given a
+    directory we search recursively and use the path below it (e.g. "<model>/xstest") as
+    the name, keeping per-benchmark results separate. A flat <model>/inference_outputs.jsonl
+    layout still works."""
     p = Path(path)
     if p.is_file():
         return [(p.parent.name, str(p))]
     if p.is_dir():
         found = []
-        for sub in sorted(p.iterdir()):
-            f = sub / "inference_outputs.jsonl"
-            if f.is_file():
-                found.append((sub.name, str(f)))
+        for f in sorted(p.rglob("inference_outputs.jsonl")):
+            rel = f.parent.relative_to(p)
+            model_name = str(rel) if str(rel) != "." else f.parent.name
+            found.append((model_name, str(f)))
         return found
     raise FileNotFoundError(f"--data_dir not found: {path}")
 

@@ -13,9 +13,15 @@ if str(FR_ROOT) not in sys.path:
 from mllm import VLMInferenceEngine, UniversalGenParams, GenerationArgs
 
 try:
-    from eval.eval_util import format_eval_input, get_label_str, compute_metrics, compute_exaggerate_safety_metrics, dump_metrics
+    from eval.eval_util import (
+        format_eval_input, get_label_str, compute_metrics,
+        compute_exaggerate_safety_metrics, compute_overrefusal_metrics, dump_metrics,
+    )
 except ImportError:
-    from eval_util import format_eval_input, get_label_str, compute_metrics, compute_exaggerate_safety_metrics, dump_metrics
+    from eval_util import (
+        format_eval_input, get_label_str, compute_metrics,
+        compute_exaggerate_safety_metrics, compute_overrefusal_metrics, dump_metrics,
+    )
 
 
 def parse_args():
@@ -38,6 +44,15 @@ def parse_args():
 
     parser.add_argument("--max_num_examples", type=int, default=None)
     parser.add_argument("--instruction_column", type=str, default="instruction")
+
+    parser.add_argument("--metric", type=str, default="auto",
+                        choices=["auto", "exaggerate", "overrefusal", "simple"],
+                        help="Which metric report to compute. 'auto' picks 'exaggerate' when a 'label' "
+                             "column exists (xstest), 'overrefusal' when a category column exists "
+                             "(pseudo-harmful sets like OR-Bench), else 'simple'.")
+    parser.add_argument("--category_column", type=str, default="category",
+                        help="Column holding the prompt category, used for the per-category "
+                             "over-refusal breakdown.")
 
     args = parser.parse_args()
     if args.save_dir is None:
@@ -113,9 +128,11 @@ def main():
 
     output_dataset.to_json(results_save_path, lines=True, force_ascii=False)
 
-    label_key = "label"
-    if label_key in output_dataset.column_names:
-        metrics = compute_exaggerate_safety_metrics(output_dataset, example_type_key=label_key)
+    cols = output_dataset.column_names
+    if args.metric == "exaggerate" or (args.metric == "auto" and "label" in cols):
+        metrics = compute_exaggerate_safety_metrics(output_dataset, example_type_key="label")
+    elif args.metric == "overrefusal" or (args.metric == "auto" and args.category_column in cols):
+        metrics = compute_overrefusal_metrics(output_dataset, category_key=args.category_column)
     else:
         metrics = compute_metrics(output_dataset)
     metrics_str = dump_metrics(metrics)

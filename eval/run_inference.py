@@ -25,6 +25,10 @@ def parse_args():
 
     parser.add_argument("--data_dir", type=str, required=True)
     parser.add_argument("--save_dir", type=str, default=None)
+    parser.add_argument("--benchmark", type=str, default="xstest",
+                        help="Benchmark name; used as a subdirectory so each model's outputs are "
+                             "grouped per benchmark (outputs/remote_models/<model>/<benchmark>/). "
+                             "Ignored when --save_dir is given explicitly.")
 
     parser.add_argument("--batch_size", type=int, default=64)
     parser.add_argument("--max_new_tokens", type=int, default=2048)
@@ -39,7 +43,7 @@ def parse_args():
     args = parser.parse_args()
     if args.save_dir is None:
         model_name = args.model.rstrip("/").split("/")[-1]
-        args.save_dir = os.path.join("outputs/remote_models", model_name)
+        args.save_dir = os.path.join("outputs/remote_models", model_name, args.benchmark)
     return args
 
 

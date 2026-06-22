@@ -1,4 +1,5 @@
 import os
+import re
 
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
@@ -210,6 +211,13 @@ class VLMInferenceOutput:
 
     
 class VLMInferenceEngine:
+    # gpt-oss (vllm offline backend) emits raw Harmony-formatted text, e.g.
+    # "<|channel|>analysis<|message|>...<|start|>assistant<|channel|>final<|message|>...<|return|>"
+    _HARMONY_CHANNEL_RE = re.compile(
+        r"<\|channel\|>\s*(\w+)\s*<\|message\|>(.*?)(?=<\|start\|>|<\|end\|>|<\|return\|>|<\|call\|>|$)",
+        re.DOTALL,
+    )
+
     def __init__(self, model_id, backend, backend_kwargs={}):
         self.model_id = model_id
         self.backend = backend
@@ -344,9 +352,29 @@ class VLMInferenceEngine:
             outputs.append(VLMInferenceOutput(output_seqs=output_text))
         return outputs
 
+    def _is_gpt_oss(self) -> bool:
+        return "gpt-oss" in self.model_id.lower()
+
+    def _extract_harmony_final(self, text: str) -> str:
+        """Extract the 'final' channel message from raw Harmony-formatted gpt-oss output,
+        discarding the 'analysis'/'commentary' chain-of-thought channels."""
+        if not text:
+            return text
+        matches = self._HARMONY_CHANNEL_RE.findall(text)
+        if not matches:
+            return text.strip()
+        final_msgs = [content for channel, content in matches if channel == "final"]
+        if final_msgs:
+            return final_msgs[-1].strip()
+        return matches[-1][1].strip()
+
     def _vllm_generate(self, gen_args: GenerationArgs) -> List[VLMInferenceOutput]:
         prompts = self._vllm_openai_input_preprocessor(gen_args)
         gen_params = gen_args.gen_params.get_vllm_params()
+        if self._is_gpt_oss():
+            # Keep Harmony special tokens (<|channel|>, <|message|>, ...) in the raw output
+            # so the channels can be split apart; vLLM strips them by default.
+            gen_params.skip_special_tokens = False
         model_outputs = self._vllm_inference(prompts, gen_args=gen_args, gen_params=gen_params)
         assert len(model_outputs) == len(prompts), "Number of inputs and outputs should be the same."
         outputs = self._vllm_parse_output(model_outputs)
@@ -530,13 +558,18 @@ class VLMInferenceEngine:
         # return [build(x) for x in gen_args.engine_input] if gen_args.is_batch_input else [build(gen_args.engine_input)]
 
     def _vllm_inference(self, prompts, gen_args, gen_params) -> List[RequestOutput]:
+        chat_kwargs = {}
+        if self._is_gpt_oss():
+            # Harmony's developer message encodes reasoning effort via chat template kwargs.
+            chat_kwargs["chat_template_kwargs"] = {"reasoning_effort": gen_args.gen_params.reasoning}
+
         if gen_args.is_batch_input or len(prompts) == 1:
-            model_output = self.model.chat(prompts, gen_params)
+            model_output = self.model.chat(prompts, gen_params, **chat_kwargs)
         elif not gen_args.is_batch_input and len(prompts) > 1:
             print(Fore.CYAN + f"[INFO] Sequential mode: Processing {len(prompts)} instances one by one...")
             model_output = []
             for prompt in tqdm(prompts, desc="Sequential Inference", leave=False):
-                output = self.model.chat([prompt], gen_params, use_tqdm=False)
+                output = self.model.chat([prompt], gen_params, use_tqdm=False, **chat_kwargs)
                 model_output.extend(output)
         else:
             raise ValueError("Invalid input configuration for VLLM inference.")
@@ -704,7 +737,10 @@ class VLMInferenceEngine:
             generation_output = sorted(request_output.outputs, key=lambda x: x.index)
             seqs, logprobs, cumulative, finish = [], [], [], []
             for s in generation_output:
-                seqs.append(getattr(s, "text", ""))
+                text = getattr(s, "text", "")
+                if self._is_gpt_oss():
+                    text = self._extract_harmony_final(text)
+                seqs.append(text)
                 logprobs.append(getattr(s, "logprobs", None))
                 cum = getattr(s, "cumulative_logprob", None)
                 if cum is None: cum = getattr(s, "cumulative_logprobs", None)

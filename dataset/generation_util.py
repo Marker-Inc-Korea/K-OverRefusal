@@ -118,3 +118,36 @@ starting with exactly "[OUTPUT]: " followed only by the Korean translation — n
 
 <TEXT>{text}</TEXT>
 """.strip()
+
+
+# System prompt for dedicated EN->KO translation models (e.g. nayohan/llama3-instrucTrans-enko-8b),
+# which expect the instruction in the system role and only the raw sentence in the user role —
+# per the model card's usage. The English text is sent as a separate user message, not formatted in.
+TRANSLATION_SYSTEM_PROMPT = "당신은 번역기 입니다. 영어를 한국어로 번역하세요."
+
+
+TRANSLATION_FILTER_PROMPT = """
+You are quality-checking English→Korean translations for an AI safety research dataset.
+For each item you are given the original English text and its Korean translation. Decide whether the
+Korean is an ACCEPTABLE translation (ok=true) or a broken/unfaithful one (ok=false).
+
+Mark ok=true only when ALL of these hold:
+- It is written in natural Korean (not English, not a code-switched mix, not gibberish).
+- It faithfully preserves the original meaning and intent — nothing added, removed, softened, censored,
+  or replaced. The model must NOT have refused or apologized instead of translating.
+- It is a translation, not a meta-comment, an answer to the request, or leftover formatting/markup.
+
+Mark ok=false if the Korean is empty, mostly English, garbled, cut off mid-sentence, a refusal or
+apology instead of a translation, or clearly does not match the English meaning.
+
+## Items
+{items}
+
+## Output format
+Return EXACTLY one JSON array and nothing else — no markdown fences, no commentary.
+Each element must be: {{"id": <number as given>, "ok": true|false}}
+Include every item id listed above, in any order.
+
+Think briefly (within 500 characters). Then write your final answer on a new line starting with exactly
+"[OUTPUT]: " followed only by the JSON array — nothing else.
+""".strip()
