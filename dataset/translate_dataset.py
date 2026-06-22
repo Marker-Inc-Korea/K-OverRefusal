@@ -1,4 +1,5 @@
 import argparse
+import csv
 import json
 import os
 import re
@@ -38,7 +39,15 @@ def parse_args():
                          help="Dataset config/subset name (e.g. 'or-bench-hard-1k' for bench-llm/or-bench). "
                               "Required for datasets that define multiple configs.")
     parser.add_argument("--dataset_split", type=str, default="test")
+    parser.add_argument("--data_file", type=str, default=None,
+                         help="Local file to translate instead of a Hub dataset (.csv / .json / .jsonl). "
+                              "Takes precedence over --dataset_name when set.")
     parser.add_argument("--prompt_column", type=str, default="prompt")
+    parser.add_argument("--filter_column", type=str, default=None,
+                         help="If set, keep only rows whose value in this column is in --filter_values "
+                              "(e.g. --filter_column Harmfulness --filter_values harmless for PHTest).")
+    parser.add_argument("--filter_values", type=str, default="",
+                         help="Comma-separated values to keep for --filter_column.")
 
     parser.add_argument("--save_path", type=str, default=DEFAULT_SAVE_PATH)
 
@@ -73,19 +82,49 @@ def parse_args():
     return parser.parse_args()
 
 
+def _read_local_examples(path: str) -> List[Dict]:
+    """Read a local .csv / .tsv / .json / .jsonl directly (no HF cache, which may be
+    read-only). CSV is parsed with the csv module so quoted multi-line fields are
+    handled correctly; cell values are whitespace-stripped."""
+    ext = Path(path).suffix.lower()
+    if ext in {".json", ".jsonl"}:
+        with open(path, encoding="utf-8") as f:
+            text = f.read().strip()
+        if ext == ".json" and text.startswith("["):
+            return list(json.loads(text))
+        return [json.loads(line) for line in text.splitlines() if line.strip()]
+
+    delimiter = "\t" if ext == ".tsv" else ","
+    with open(path, encoding="utf-8-sig", newline="") as f:
+        reader = csv.DictReader(f, delimiter=delimiter)
+        return [{k: (v.strip() if isinstance(v, str) else v) for k, v in row.items()} for row in reader]
+
+
 def load_examples(args) -> List[Dict]:
-    if args.dataset_config:
-        dataset = load_dataset(args.dataset_name, args.dataset_config, split=args.dataset_split)
+    if args.data_file:
+        examples = _read_local_examples(args.data_file)
+    elif args.dataset_config:
+        examples = [dict(e) for e in load_dataset(args.dataset_name, args.dataset_config, split=args.dataset_split)]
     else:
-        dataset = load_dataset(args.dataset_name, split=args.dataset_split)
+        examples = [dict(e) for e in load_dataset(args.dataset_name, split=args.dataset_split)]
+
+    if examples and args.prompt_column not in examples[0]:
+        raise ValueError(f"Column '{args.prompt_column}' not found. Available: {list(examples[0].keys())}")
+
+    # Keep only rows whose --filter_column value is in --filter_values (e.g. only the
+    # 'harmless' subset of PHTest's 'Harmfulness' column — pseudo-harmful = harmless).
+    if args.filter_column:
+        if examples and args.filter_column not in examples[0]:
+            raise ValueError(f"Filter column '{args.filter_column}' not found. Available: {list(examples[0].keys())}")
+        keep = {v.strip() for v in args.filter_values.split(",") if v.strip()}
+        before = len(examples)
+        examples = [e for e in examples if str(e.get(args.filter_column)).strip() in keep]
+        print(f"[filter] {args.filter_column} in {sorted(keep)}: kept {len(examples)}/{before}")
 
     if args.max_num_examples is not None:
-        dataset = dataset.select(range(min(args.max_num_examples, len(dataset))))
+        examples = examples[:args.max_num_examples]
 
-    if args.prompt_column not in dataset.column_names:
-        raise ValueError(f"Column '{args.prompt_column}' not found. Available: {dataset.column_names}")
-
-    return [dict(example) for example in tqdm(dataset, desc="Loading examples")]
+    return examples
 
 
 def build_backend_kwargs(args) -> Dict:
@@ -339,7 +378,8 @@ def main():
     ensure_parent_dir(args.save_path)
 
     examples = load_examples(args)
-    print(f"Loaded {len(examples)} examples from {args.dataset_name} ({args.dataset_split} split)")
+    source_desc = args.data_file if args.data_file else f"{args.dataset_name} ({args.dataset_split} split)"
+    print(f"Loaded {len(examples)} examples from {source_desc}")
 
     backend_kwargs = build_backend_kwargs(args)
     model = VLMInferenceEngine(
