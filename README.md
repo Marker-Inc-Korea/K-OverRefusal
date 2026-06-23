@@ -109,7 +109,7 @@ pseudo-harmful 카테고리는 요청의 **유해 주제(topic)** 가 아니라 
 `k_idioms`를 제외한 데이터는 다음 공개 over-refusal 데이터셋을 한국어로 확장·재구성하였습니다.
 
 - **XSTest** — https://github.com/paul-rottger/xstest
-- **OR-Bench** — https://huggingface.co/datasets/bench-llm/or-bench
+- **OR-Bench** — https://github.com/justincui03/or-bench
 - **OKTest** (OverKill) — https://github.com/InvokerStark/OverKill
 - **PHTest** (FalseRefusal) — https://github.com/umd-huang-lab/FalseRefusal
 
