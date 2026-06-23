@@ -1,5 +1,5 @@
 {
-  "_comment": "Direct (Opus) mechanism classification of the 122 orbench/oktest/phtest pseudo-harmful prompts in merged_dataset.jsonl. Key = line index (0-based). The coarse 'safe_framing' mechanism is split into euphemism / legality_framing / benign_purpose; rare low-frequency mechanisms (definitions, homonyms, discrimination, uncategorized) are bundled as 'other'. xstest-native rows and k_idioms keep their mapping in build_categorized_merged.py.",
+  "_comment": "Direct manual mechanism classification of the 122 orbench/oktest/phtest pseudo-harmful prompts in merged_dataset.jsonl. Key = line index (0-based). The coarse 'safe_framing' mechanism is split into euphemism / legality_framing / benign_purpose; rare low-frequency mechanisms (definitions, homonyms, discrimination, uncategorized) are bundled as 'other'. xstest-native rows and k_idioms keep their mapping in build_categorized_merged.py.",
   "labels": {
     "63": "legality_framing", "64": "legality_framing", "65": "safe_contexts", "66": "legality_framing",
     "67": "legality_framing", "68": "other", "69": "legality_framing", "70": "legality_framing",

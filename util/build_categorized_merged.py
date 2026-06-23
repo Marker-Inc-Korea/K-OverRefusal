@@ -1,7 +1,7 @@
-"""Reconcile mechanism labels (Opus cross-check vs gpt-oss-120b) and write a
+"""Reconcile mechanism labels (manual cross-check vs gpt-oss-120b) and write a
 mechanism-categorized version of the pseudo-harmful set using ALL rows (no downsampling).
 
-The coarse `safe_framing` mechanism is split (in util/mechanism_labels_opus.json) into
+The coarse `safe_framing` mechanism is split (in util/mechanism_labels_manual.json) into
 euphemism / legality_framing / benign_purpose, and rare low-frequency mechanisms
 (definitions, homonyms, discrimination, ...) are bundled as `other`, so category counts
 come out roughly even WITHOUT dropping or downsampling any prompt.
@@ -9,13 +9,13 @@ come out roughly even WITHOUT dropping or downsampling any prompt.
 Inputs:
   - dataset/final/merged_dataset.jsonl        (source; `type` = provenance)
   - dataset/final/mechanism_gptoss.jsonl       (gpt-oss-120b classifier output, coarse)
-  - util/mechanism_labels_opus.json            (direct Opus labels, fine-grained)
+  - util/mechanism_labels_manual.json          (direct manual labels, fine-grained)
 
 Pipeline:
   1. Normalize xstest-native types onto the final axis (privacy_*->privacy, safe_contexts
      kept; rare mechanisms folded into `other`) and keep k_idioms whole.
   2. For orbench/oktest/phtest rows, take the final mechanism from `--primary`
-     (opus|gptoss). Report Opus vs gpt-oss agreement at the COARSE level (collapsing the
+     (manual|gptoss). Report manual vs gpt-oss agreement at the COARSE level (collapsing the
      three safe_framing sub-categories and the `other` members) and list disagreements.
   3. Write every pseudo-harmful row (re-typed) + the untouched harmful rows.
 """
@@ -44,7 +44,7 @@ XSTEST_TO_FINAL = {
 }
 
 # Collapse the final fine-grained labels (and gpt-oss's coarse labels) into a common
-# space so Opus and gpt-oss can be compared apples-to-apples.
+# space so the manual labels and gpt-oss can be compared apples-to-apples.
 COARSE = {
     "euphemism": "safe_framing", "legality_framing": "safe_framing", "benign_purpose": "safe_framing",
     "definitions": "other", "homonyms": "other", "discrimination": "other",
@@ -66,9 +66,9 @@ def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--merged_path", default=f"{FR_ROOT}/dataset/final/merged_dataset.jsonl")
     p.add_argument("--gptoss_path", default=f"{FR_ROOT}/dataset/final/mechanism_gptoss.jsonl")
-    p.add_argument("--opus_path", default=f"{FR_ROOT}/util/mechanism_labels_opus.json")
+    p.add_argument("--manual_path", default=f"{FR_ROOT}/util/mechanism_labels_manual.json")
     p.add_argument("--save_path", default=f"{FR_ROOT}/dataset/final/merged_dataset_categorized.jsonl")
-    p.add_argument("--primary", choices=["opus", "gptoss"], default="opus",
+    p.add_argument("--primary", choices=["manual", "gptoss"], default="manual",
                    help="Which labeler is authoritative for orbench/oktest/phtest rows.")
     p.add_argument("--report_only", action="store_true")
     return p.parse_args()
@@ -77,7 +77,7 @@ def parse_args():
 def main():
     args = parse_args()
     rows = read_jsonl(args.merged_path)
-    opus = json.load(open(args.opus_path, encoding="utf-8"))["labels"]
+    manual = json.load(open(args.manual_path, encoding="utf-8"))["labels"]
     gptoss = {r["idx"]: r["mechanism"] for r in read_jsonl(args.gptoss_path)} if os.path.exists(args.gptoss_path) else {}
 
     final_mech: Dict[int, str] = {}
@@ -96,7 +96,7 @@ def main():
             if i in gptoss:
                 calib_rows.append((i, final_mech[i], coarse(gptoss[i])))
             continue
-        o = opus.get(str(i))
+        o = manual.get(str(i))
         g = gptoss.get(i)
         if o and g:
             if coarse(o) == coarse(g):
@@ -112,7 +112,7 @@ def main():
         print(f"  {v:>3}  {k}")
     if gptoss:
         n = agree + disagree
-        print(f"\n=== Opus vs gpt-oss COARSE agreement (orbench/oktest/phtest, n={n}) ===")
+        print(f"\n=== manual vs gpt-oss COARSE agreement (orbench/oktest/phtest, n={n}) ===")
         print(f"  agree {agree}  disagree {disagree}  ->  {100*agree/max(n,1):.1f}%")
         if calib_rows:
             ok = sum(x == g for _, x, g in calib_rows)

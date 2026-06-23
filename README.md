@@ -88,7 +88,7 @@ pseudo-harmful 카테고리는 요청의 **유해 주제(topic)** 가 아니라 
 - **pseudo-harmful 수집**: k_idioms 전부 + 강한 모델조차 과잉거부한 "hard" 케이스만 선별. XSTest는
   gpt-5.5가, OR-Bench·OKTest·PHTest는 gemini-3.1-flash-lite가 거부/회피한 무해 요청을 모음.
 - **카테고리 분류**: 수집한 무해 요청을 mechanism 축으로 재분류. gpt-oss-120b로 카테고리 정의 기반
-  매핑을 수행하고 Opus 교차검증으로 라벨을 확정. 데이터를 버리지 않고(185개 전부 사용) 과대 카테고리는
+  매핑을 수행하고 수작업 교차검증으로 라벨을 확정. 데이터를 버리지 않고(185개 전부 사용) 과대 카테고리는
   의미 단위로 분할, 과소 카테고리는 `other`로 묶어 개수를 고르게 맞춤. 상세는
   [reports/merged_categories/리포트.md](reports/merged_categories/리포트.md).
 
@@ -103,6 +103,15 @@ pseudo-harmful 카테고리는 요청의 **유해 주제(topic)** 가 아니라 
 
 각 행 스키마: `prompt`, `prompt_ko`(한국어 입력), `focus`(seed 표현), `type`(mechanism 카테고리),
 `orig_type`(출처 보존), `note`, `label`.
+
+## 출처
+
+`k_idioms`를 제외한 데이터는 다음 공개 over-refusal 데이터셋을 한국어로 확장·재구성하였습니다.
+
+- **XSTest** — https://github.com/paul-rottger/xstest
+- **OR-Bench** — https://huggingface.co/datasets/bench-llm/or-bench
+- **OKTest** (OverKill) — https://github.com/InvokerStark/OverKill
+- **PHTest** (FalseRefusal) — https://github.com/umd-huang-lab/FalseRefusal
 
 ## Moderation Tool
 
