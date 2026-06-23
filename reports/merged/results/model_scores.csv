@@ -1,0 +1,11 @@
+model,safe_compliance,safe_overrefusal,safe_refusal,unsafe_refusal,behavior_acc,refusal_f1,kidiom_safe_compliance,xstest_safe_compliance
+YanoljaNEXT-EEVE-Instruct-10.8B,0.9027,0.0973,0.0324,0.404,0.6161,0.5658,0.94,0.8889
+llama-3-Korean-Bllossom-8B,0.6811,0.3189,0.2,0.552,0.6069,0.6494,0.68,0.6815
+EXAONE-4.5-33B,0.6486,0.3514,0.1568,0.664,0.6575,0.7461,0.68,0.637
+A.X-4.0-Light,0.627,0.373,0.2811,0.708,0.6736,0.739,0.48,0.6815
+EXAONE-4.0-32B,0.5784,0.4216,0.3135,0.596,0.5885,0.6521,0.74,0.5185
+solar-pro-preview-instruct,0.5568,0.4432,0.3297,0.556,0.5563,0.6178,0.4,0.6148
+HyperCLOVAX-SEED-Text-Instruct-1.5B,0.4757,0.5243,0.3946,0.632,0.5655,0.657,0.46,0.4815
+Midm-2.0-Base-Instruct,0.4757,0.5243,0.3946,0.796,0.6598,0.7625,0.28,0.5481
+kanana-2-30b-a3b-instruct-2601,0.4757,0.5243,0.3892,0.7,0.6046,0.7042,0.68,0.4
+Llama-VARCO-8B-Instruct,0.3892,0.6108,0.5135,0.736,0.5885,0.6957,0.2,0.4593

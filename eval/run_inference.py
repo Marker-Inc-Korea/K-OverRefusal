@@ -22,6 +22,11 @@ def parse_args():
     parser.add_argument("--gpu_memory_utilization", type=float, default=0.85)
     parser.add_argument("--max_model_len", type=int, default=None)
     parser.add_argument("--max_num_seqs", type=int, default=None)
+    parser.add_argument("--skip_mm_profiling", action="store_true",
+                        help="Skip vLLM's dummy-multimodal memory profiling pass. Needed for some "
+                             "multimodal checkpoints (e.g. EXAONE-4.x) whose vision tower is incompatible "
+                             "with the installed vLLM version and crashes during profiling. We only ever "
+                             "send text, so this is a harmless no-op for text-only models.")
 
     parser.add_argument("--data_dir", type=str, required=True)
     parser.add_argument("--save_dir", type=str, default=None)
@@ -52,6 +57,47 @@ def batched(items, batch_size):
         yield items[start: start + batch_size]
 
 
+# Models whose usable context we cap below their advertised window (e.g. for memory).
+# Substring match against the model id.
+_MODEL_MAX_LEN_CAPS = {
+    "HyperCLOVAX": 4096,
+}
+
+
+def _config_max_pos(cfg) -> int:
+    """Best-effort max context from a HF config (handles multimodal nested configs)."""
+    for obj in (cfg, getattr(cfg, "text_config", None), getattr(cfg, "llm_config", None)):
+        if obj is None:
+            continue
+        v = getattr(obj, "max_position_embeddings", None)
+        if isinstance(v, int) and v > 0:
+            return v
+    return 0
+
+
+def derive_max_model_len(model_id: str, requested):
+    """Clamp the requested max_model_len to what the model actually supports, so a
+    single --max_model_len works across models with different context windows
+    (vLLM errors if asked for more than the model's max_position_embeddings)."""
+    if requested is None:
+        return None
+    caps = [requested]
+    for key, cap in _MODEL_MAX_LEN_CAPS.items():
+        if key.lower() in model_id.lower():
+            caps.append(cap)
+    try:
+        from transformers import AutoConfig
+        model_max = _config_max_pos(AutoConfig.from_pretrained(model_id, trust_remote_code=True))
+        if model_max:
+            caps.append(model_max)
+    except Exception as e:
+        print(f"[warn] could not read config for {model_id}: {e}; using requested max_model_len={requested}")
+    eff = min(caps)
+    if eff != requested:
+        print(f"[info] max_model_len: requested {requested} -> {eff} (model limit) for {model_id}")
+    return eff
+
+
 def main():
     args = parse_args()
     os.makedirs(args.save_dir, exist_ok=True)
@@ -61,12 +107,13 @@ def main():
             "tensor_parallel_size": args.model_num_gpus,
             "gpu_memory_utilization": args.gpu_memory_utilization,
         }
-        if args.max_model_len is not None:
-            backend_kwargs["max_model_len"] = args.max_model_len
-        if "HyperCLOVAX" in args.model:
-            backend_kwargs["max_model_len"] = "4096"
+        eff_max_len = derive_max_model_len(args.model, args.max_model_len)
+        if eff_max_len is not None:
+            backend_kwargs["max_model_len"] = eff_max_len
         if args.max_num_seqs is not None:
             backend_kwargs["max_num_seqs"] = args.max_num_seqs
+        if args.skip_mm_profiling:
+            backend_kwargs["skip_mm_profiling"] = True
     elif args.model_engine_backend in {"vllm-openai", "openrouter"}:
         backend_kwargs = {}
         if args.model_backend_base_url is not None:
