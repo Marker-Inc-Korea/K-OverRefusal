@@ -1,0 +1,11 @@
+mechanism,opus_prebalance,gptoss_prebalance,balanced_final
+safe_framing,63,56,18
+k_idioms,50,0,50
+privacy,23,17,18
+safe_contexts,21,19,18
+harmless_analog,14,8,14
+definitions,8,9,8
+homonyms,3,2,0
+discrimination,2,2,0
+OTHER,1,22,0
+TOTAL,185,135,126
