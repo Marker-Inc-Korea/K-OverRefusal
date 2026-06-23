@@ -18,25 +18,27 @@ false refusal을, 특히 **한국어 맥락에서만 발생하는 패턴**까지
 
 ## 데이터셋 구성
 
-총 **376개** 샘플 (`dataset/final/merged_dataset_categorized.jsonl`).
+총 **435개** 샘플 (`dataset/final/merged_dataset_categorized.jsonl`).
 
 | 레이블 | 의미 | 수량 |
 |---|---|--:|
-| `safe` (pseudo-harmful) | 무해하지만 유해해 보이는 요청 | 126 |
+| `safe` (pseudo-harmful) | 무해하지만 유해해 보이는 요청 | 185 |
 | `unsafe` (harmful) | 구조가 유사한 실제 유해 대조 요청 | 250 |
 
-### pseudo-harmful (label=`safe`) — 126
+### pseudo-harmful (label=`safe`) — 185
 
 무해 요청을 **false refusal을 유발하는 mechanism**(왜 무해한데 유해해 보이는가)으로 분류합니다.
 
 | 카테고리 | 설명 | 수량 |
 |---|---|--:|
 | `k_idioms` | 한국어 관용·문화 표현에 유해 키워드가 무해하게 쓰인 요청 (한국 특화) | 50 |
-| `safe_framing` | 민감 행위 요청이 명시적 합법/무해 단서·정당 목적·완곡어법으로 중화됨 | 18 |
-| `privacy` | 공개정보·허구 인물·동의·정당 사유로 무해하게 프레이밍된 개인정보·감시 질문 | 18 |
-| `safe_contexts` | 허구·창작·게임·예술·장난·훈련 등 **맥락**이 무해함을 드러내는 요청 | 18 |
+| `legality_framing` | 민감 행위 how-to에 명시적 합법/무해 단서를 덧붙여 중화 ("합법적으로", "피해 없이") | 29 |
+| `privacy` | 공개정보·허구 인물·동의·정당 사유로 무해하게 프레이밍된 개인정보·감시 질문 | 23 |
+| `safe_contexts` | 허구·창작·게임·예술·장난·훈련 등 **맥락**이 무해함을 드러내는 요청 | 21 |
+| `euphemism` | 유해 행위를 합법적으로 들리는 완곡어법으로 우회 지칭 (자금세탁·내부자거래·밀수 등) | 20 |
 | `harmless_analog` | 유해물의 안전한 모형·복제·소품·모방품에 대한 요청 | 14 |
-| `definitions` | 민감 개념의 정의·원리·위험을 묻는 교육적·정보적 질문 | 8 |
+| `benign_purpose` | 정당한 목적·역할·상황을 명시해 정당화 (연구·전문직·긴급·신고·창작목적) | 14 |
+| `other` | 개별 빈도가 낮은 mechanism 묶음 (교육적 정의 질문, 동음어, 편향 노출 등) | 14 |
 
 ### harmful (label=`unsafe`) — 250
 
@@ -54,8 +56,8 @@ false refusal을, 특히 **한국어 맥락에서만 발생하는 패턴**까지
 ## false-refusal mechanism 축
 
 pseudo-harmful 카테고리는 요청의 **유해 주제(topic)** 가 아니라 **false refusal을 유발하는 언어적·
-맥락적 mechanism** 을 기준으로 합니다. 같은 주제(예: 약물)라도 표현 방식에 따라 `definitions`(설명을
-구함)·`harmless_analog`(안전한 모방품)·`safe_framing`(합법 단서로 중화)·`safe_contexts`(창작 맥락)로
+맥락적 mechanism** 을 기준으로 합니다. 같은 주제(예: 약물)라도 표현 방식에 따라 `harmless_analog`(안전한
+모방품)·`legality_framing`(합법 단서로 중화)·`euphemism`(완곡어법 우회)·`safe_contexts`(창작 맥락)로
 달라집니다. 이는 "무해한데 왜 유해해 보이는가"를 직접 진단하는 축으로, false refusal의 **원인별**
 취약점을 드러냅니다.
 
@@ -86,8 +88,9 @@ pseudo-harmful 카테고리는 요청의 **유해 주제(topic)** 가 아니라 
 - **pseudo-harmful 수집**: k_idioms 전부 + 강한 모델조차 과잉거부한 "hard" 케이스만 선별. XSTest는
   gpt-5.5가, OR-Bench·OKTest·PHTest는 gemini-3.1-flash-lite가 거부/회피한 무해 요청을 모음.
 - **카테고리 분류**: 수집한 무해 요청을 mechanism 축으로 재분류. gpt-oss-120b로 카테고리 정의 기반
-  매핑을 수행하고 별도 교차검증으로 라벨을 확정. 카테고리별 개수는 고르게 균형을 맞춤
-  (k_idioms 50은 전부 사용). 상세는 [reports/merged_categories/리포트.md](reports/merged_categories/리포트.md).
+  매핑을 수행하고 Opus 교차검증으로 라벨을 확정. 데이터를 버리지 않고(185개 전부 사용) 과대 카테고리는
+  의미 단위로 분할, 과소 카테고리는 `other`로 묶어 개수를 고르게 맞춤. 상세는
+  [reports/merged_categories/리포트.md](reports/merged_categories/리포트.md).
 
 ## 데이터 예시
 
