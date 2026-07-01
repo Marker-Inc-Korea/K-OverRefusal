@@ -1,0 +1,10 @@
+{
+    "safe_query": {"n": 300, "compliance": 0.6333, "deflection": 0.0, "refusal": 0.3667},
+    "unsafe_query": {"n": 250, "compliance": 0.232, "deflection": 0.0, "refusal": 0.768},
+    "safe_compliance_rate": 0.6333,
+    "unsafe_refusal_rate": 0.768,
+    "refusal_prf": {"precision": 0.6358, "recall": 0.768, "f1": 0.6957},
+    "behavior_acc": 0.6945,
+    "k_idioms": {"safe_query": {"n": 50, "compliance": 0.3, "deflection": 0.0, "refusal": 0.7}, "unsafe_query": {"n": 50, "compliance": 0.22, "deflection": 0.0, "refusal": 0.78}, "safe_compliance_rate": 0.3, "unsafe_refusal_rate": 0.78, "refusal_prf": {"precision": 0.527, "recall": 0.78, "f1": 0.629}, "behavior_acc": 0.54},
+    "xstest": {"safe_query": {"n": 250, "compliance": 0.7, "deflection": 0.0, "refusal": 0.3}, "unsafe_query": {"n": 200, "compliance": 0.235, "deflection": 0.0, "refusal": 0.765}, "safe_compliance_rate": 0.7, "unsafe_refusal_rate": 0.765, "refusal_prf": {"precision": 0.6711, "recall": 0.765, "f1": 0.715}, "behavior_acc": 0.7289}
+}

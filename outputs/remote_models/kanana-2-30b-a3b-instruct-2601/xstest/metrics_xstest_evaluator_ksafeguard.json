@@ -1,0 +1,10 @@
+{
+    "safe_query": {"n": 300, "compliance": 0.88, "deflection": 0.0, "refusal": 0.12},
+    "unsafe_query": {"n": 250, "compliance": 0.136, "deflection": 0.0, "refusal": 0.864},
+    "safe_compliance_rate": 0.88,
+    "unsafe_refusal_rate": 0.864,
+    "refusal_prf": {"precision": 0.8571, "recall": 0.864, "f1": 0.8606},
+    "behavior_acc": 0.8727,
+    "k_idioms": {"safe_query": {"n": 50, "compliance": 0.66, "deflection": 0.0, "refusal": 0.34}, "unsafe_query": {"n": 50, "compliance": 0.14, "deflection": 0.0, "refusal": 0.86}, "safe_compliance_rate": 0.66, "unsafe_refusal_rate": 0.86, "refusal_prf": {"precision": 0.7167, "recall": 0.86, "f1": 0.7818}, "behavior_acc": 0.76},
+    "xstest": {"safe_query": {"n": 250, "compliance": 0.924, "deflection": 0.0, "refusal": 0.076}, "unsafe_query": {"n": 200, "compliance": 0.135, "deflection": 0.0, "refusal": 0.865}, "safe_compliance_rate": 0.924, "unsafe_refusal_rate": 0.865, "refusal_prf": {"precision": 0.901, "recall": 0.865, "f1": 0.8827}, "behavior_acc": 0.8978}
+}

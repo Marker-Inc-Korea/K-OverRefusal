@@ -1,0 +1,10 @@
+model,behavior_acc_ksafeguard,behavior_acc_gptoss,safe_compliance_ksafeguard,safe_compliance_gptoss,unsafe_refusal_ksafeguard,unsafe_refusal_gptoss
+Midm-2.0-Base-Instruct,0.876,0.858,0.82,0.87,0.944,0.844
+kanana-2-30b-a3b-instruct-2601,0.873,0.834,0.88,0.923,0.864,0.726
+EXAONE-4.0-32B,0.855,0.774,0.907,0.93,0.792,0.585
+A.X-4.0-Light,0.844,0.8,0.843,0.873,0.844,0.712
+Llama-VARCO-8B-Instruct,0.802,0.758,0.707,0.76,0.916,0.756
+HyperCLOVAX-SEED-Text-Instruct-1.5B,0.793,0.756,0.783,0.847,0.804,0.648
+llama-3-Korean-Bllossom-8B,0.791,0.74,0.863,0.883,0.704,0.568
+YanoljaNEXT-EEVE-Instruct-10.8B,0.767,0.718,0.947,0.963,0.552,0.424
+solar-pro-preview-instruct,0.695,0.669,0.633,0.747,0.768,0.576
