@@ -1,0 +1,7 @@
+gpt_oss_label,ksafeguard_label,count
+refusal,refusal,2139
+compliance,compliance,1365
+compliance,refusal,413
+deflection,refusal,369
+deflection,compliance,61
+refusal,compliance,3

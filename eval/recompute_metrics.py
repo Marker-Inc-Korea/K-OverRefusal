@@ -58,8 +58,15 @@ def main():
         print(f"Column '{args.label_key}' not found — falling back to compute_metrics (no safe/unsafe split).")
         metrics = compute_metrics(dataset)
 
+    # Mirror the results filename: results_<tag>.jsonl -> metrics_<tag>.json
+    base = os.path.basename(args.results_path)
+    if base.startswith("results_") and base.endswith(".jsonl"):
+        metrics_name = "metrics_" + base[len("results_"):-len(".jsonl")] + ".json"
+    else:
+        metrics_name = "metrics.json"
+
     metrics_str = dump_metrics(metrics)
-    metrics_save_path = os.path.join(save_dir, "metrics.json")
+    metrics_save_path = os.path.join(save_dir, metrics_name)
     with open(metrics_save_path, "w", encoding="utf-8") as f:
         f.write(metrics_str + "\n")
 

@@ -14,12 +14,12 @@ from mllm import VLMInferenceEngine, UniversalGenParams, GenerationArgs
 
 try:
     from eval.eval_util import (
-        format_eval_input, get_label_str, compute_metrics,
+        EVALUATORS, compute_metrics,
         compute_exaggerate_safety_metrics, compute_overrefusal_metrics, dump_metrics,
     )
 except ImportError:
     from eval_util import (
-        format_eval_input, get_label_str, compute_metrics,
+        EVALUATORS, compute_metrics,
         compute_exaggerate_safety_metrics, compute_overrefusal_metrics, dump_metrics,
     )
 
@@ -27,6 +27,12 @@ except ImportError:
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--evaluator", type=str, default="openai/gpt-oss-safeguard-120b")
+    parser.add_argument("--evaluator_type", type=str, default="auto",
+                        choices=["auto", "llm_judge", "ksafeguard"],
+                        help="Judge I/O type. 'llm_judge' = 3-way behavior-policy prompt "
+                             "(gpt-oss/gpt-5.5/Llama-3.3...). 'ksafeguard' = WildGuard "
+                             "moderation format, refusal/compliance. 'auto' picks ksafeguard "
+                             "when the evaluator id contains 'ksafeguard'/'modguard'.")
     parser.add_argument("--evaluator_engine_backend", type=str, default="vllm")
     parser.add_argument("--evaluator_backend_base_url", type=str, default=None)
     parser.add_argument("--evaluator_num_gpus", type=int, default=1)
@@ -38,6 +44,14 @@ def parse_args():
                         help="Path to inference_outputs.jsonl produced by run_inference.py")
     parser.add_argument("--save_dir", type=str, default=None,
                         help="Directory to save results. Defaults to data_dir's parent directory.")
+    parser.add_argument("--dataset_name", type=str, default=None,
+                        help="Benchmark tag used in the output filenames "
+                             "(results_<dataset>_evaluator_<evaluator>.jsonl). "
+                             "Defaults to the save_dir basename.")
+    parser.add_argument("--evaluator_name", type=str, default=None,
+                        help="Evaluator tag used in the output filenames. Defaults to the "
+                             "evaluator id leaf; set a clean name (e.g. 'ksafeguard') when the "
+                             "evaluator is a long local path.")
 
     parser.add_argument("--batch_size", type=int, default=64)
     parser.add_argument("--max_new_tokens", type=int, default=2048)
@@ -57,6 +71,11 @@ def parse_args():
     args = parser.parse_args()
     if args.save_dir is None:
         args.save_dir = os.path.dirname(os.path.abspath(args.data_dir))
+    if args.dataset_name is None:
+        args.dataset_name = os.path.basename(os.path.normpath(args.save_dir))
+    if args.evaluator_type == "auto":
+        low = args.evaluator.lower()
+        args.evaluator_type = "ksafeguard" if ("ksafeguard" in low or "modguard" in low) else "llm_judge"
     return args
 
 
@@ -96,8 +115,10 @@ def main():
         dataset = dataset.select(range(min(args.max_num_examples, len(dataset))))
     print(f"Loaded {len(dataset)} examples from {args.data_dir}")
 
+    format_input, parse_label = EVALUATORS[args.evaluator_type]
+    print(f"Evaluator type: {args.evaluator_type}")
     eval_inputs = [
-        format_eval_input(ex[args.instruction_column], ex["response"])
+        format_input(ex[args.instruction_column], ex["response"])
         for ex in dataset
     ]
 
@@ -115,7 +136,7 @@ def main():
         outputs = evaluator.generate(gen_args)
         clf_outputs.extend(o.output_seqs[0] if o.output_seqs else "" for o in outputs)
 
-    labels = [get_label_str(text) for text in clf_outputs]
+    labels = [parse_label(text) for text in clf_outputs]
 
     results = [
         {**example, "refusal_clf_output": clf_out, "refusal_clf_label": label}
@@ -123,8 +144,13 @@ def main():
     ]
     output_dataset = Dataset.from_list(results)
 
-    results_save_path = os.path.join(args.save_dir, "evaluation_results.jsonl")
-    metrics_save_path = os.path.join(args.save_dir, "metrics.json")
+    # Encode benchmark + evaluator in the filenames so multiple evaluators
+    # (e.g. gpt-oss-120b, gpt-5.5, Llama-3.3-70B-Instruct) coexist without overwriting:
+    #   results_<dataset>_evaluator_<evaluator>.jsonl / metrics_<dataset>_evaluator_<evaluator>.json
+    evaluator_tag = args.evaluator_name or args.evaluator.split("/")[-1]
+    tag = f"{args.dataset_name}_evaluator_{evaluator_tag}"
+    results_save_path = os.path.join(args.save_dir, f"results_{tag}.jsonl")
+    metrics_save_path = os.path.join(args.save_dir, f"metrics_{tag}.json")
 
     output_dataset.to_json(results_save_path, lines=True, force_ascii=False)
 
