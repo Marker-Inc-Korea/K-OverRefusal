@@ -4,14 +4,13 @@ import sys
 from pathlib import Path
 
 from datasets import Dataset
-from tqdm import tqdm
 
 FR_ROOT = Path(__file__).resolve().parents[1]
 if str(FR_ROOT) not in sys.path:
     sys.path.insert(0, str(FR_ROOT))
 
-from mllm import VLMInferenceEngine, UniversalGenParams, GenerationArgs
-from util import batched
+from mllm import UniversalGenParams
+from util import build_engine, run_batch_generate
 
 try:
     from eval.eval_util import (
@@ -84,26 +83,13 @@ def main():
     args = parse_args()
     os.makedirs(args.save_dir, exist_ok=True)
 
-    if args.evaluator_engine_backend == "vllm":
-        backend_kwargs = {
-            "tensor_parallel_size": args.evaluator_num_gpus,
-            "gpu_memory_utilization": args.gpu_memory_utilization,
-        }
-        if args.max_model_len is not None:
-            backend_kwargs["max_model_len"] = args.max_model_len
-        if args.max_num_seqs is not None:
-            backend_kwargs["max_num_seqs"] = args.max_num_seqs
-    elif args.evaluator_engine_backend in {"vllm-openai", "openrouter"}:
-        backend_kwargs = {}
-        if args.evaluator_backend_base_url is not None:
-            backend_kwargs["base_url"] = args.evaluator_backend_base_url
-    else:
-        backend_kwargs = {}
-
-    evaluator = VLMInferenceEngine(
-        args.evaluator,
-        backend=args.evaluator_engine_backend,
-        backend_kwargs=backend_kwargs,
+    evaluator = build_engine(
+        args.evaluator, args.evaluator_engine_backend,
+        num_gpus=args.evaluator_num_gpus,
+        gpu_memory_utilization=args.gpu_memory_utilization,
+        max_model_len=args.max_model_len,
+        max_num_seqs=args.max_num_seqs,
+        base_url=args.evaluator_backend_base_url,
     )
 
     dataset = Dataset.from_json(args.data_dir)
@@ -119,19 +105,8 @@ def main():
     ]
 
     gen_params = UniversalGenParams(n=1, max_new_tokens=args.max_new_tokens, temperature=0.0)
-
-    clf_outputs = []
-    for batch_inputs in tqdm(list(batched(eval_inputs, args.batch_size)), desc="Evaluating"):
-        gen_args = GenerationArgs(
-            engine_input=batch_inputs,
-            gen_params=gen_params,
-            is_multi_turn_input=False,
-            is_batch_input=True,
-            add_generation_prompt=True,
-        )
-        outputs = evaluator.generate(gen_args)
-        clf_outputs.extend(o.output_seqs[0] if o.output_seqs else "" for o in outputs)
-
+    clf_outputs = run_batch_generate(evaluator, eval_inputs, gen_params, args.batch_size,
+                                     desc="Evaluating")
     labels = [parse_label(text) for text in clf_outputs]
 
     results = [

@@ -1,20 +1,17 @@
 import argparse
 import csv
 import json
-import os
 import re
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from tqdm import tqdm
-
 FR_ROOT = Path(__file__).resolve().parents[1]
 if str(FR_ROOT) not in sys.path:
     sys.path.insert(0, str(FR_ROOT))
 
-from mllm import GenerationArgs, UniversalGenParams, VLMInferenceEngine
-from util import run_batch_generate
+from mllm import UniversalGenParams
+from util import build_engine, run_batch_generate, ensure_parent_dir
 try:
     from generation_util import SEED_INSTRUCTION_GENERATION_PROMPT
 except ImportError:
@@ -92,29 +89,6 @@ def read_seed_rows(
             })
 
     return rows
-
-
-def build_backend_kwargs(args) -> Dict:
-    if args.model_engine_backend == "vllm":
-        backend_kwargs = {
-            "tensor_parallel_size": args.model_num_gpus,
-            "gpu_memory_utilization": args.gpu_memory_utilization,
-        }
-        if args.max_model_len is not None:
-            backend_kwargs["max_model_len"] = args.max_model_len
-        if args.max_num_seqs is not None:
-            backend_kwargs["max_num_seqs"] = args.max_num_seqs
-        return backend_kwargs
-
-    if args.model_engine_backend in {"vllm-openai", "openrouter"}:
-        backend_kwargs = {}
-        if args.model_backend_base_url is not None:
-            backend_kwargs["base_url"] = args.model_backend_base_url
-        return backend_kwargs
-
-    return {}
-
-
 
 
 def build_generation_prompt(pseudo_instruction: str, harmful_keyword: str) -> str:
@@ -217,12 +191,6 @@ def make_record(seed_row: Dict, instruction: str) -> Dict:
     }
 
 
-def ensure_parent_dir(path: str):
-    parent_dir = os.path.dirname(path)
-    if parent_dir:
-        os.makedirs(parent_dir, exist_ok=True)
-
-
 def append_jsonl(path: Optional[str], records: List[Dict]):
     if not records or path is None:
         return
@@ -240,8 +208,6 @@ def initialize_output_files(args):
         if not args.append:
             with open(path, "w", encoding="utf-8"):
                 pass
-
-
 
 
 def main():
@@ -263,11 +229,13 @@ def main():
 
     print(f"Generating instructions for {len(seed_rows)} seeds...")
 
-    backend_kwargs = build_backend_kwargs(args)
-    model = VLMInferenceEngine(
-        args.model,
-        backend=args.model_engine_backend,
-        backend_kwargs=backend_kwargs,
+    model = build_engine(
+        args.model, args.model_engine_backend,
+        num_gpus=args.model_num_gpus,
+        gpu_memory_utilization=args.gpu_memory_utilization,
+        max_model_len=args.max_model_len,
+        max_num_seqs=args.max_num_seqs,
+        base_url=args.model_backend_base_url,
     )
     gen_params = UniversalGenParams(
         n=1,

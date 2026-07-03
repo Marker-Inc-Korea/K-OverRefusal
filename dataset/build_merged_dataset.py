@@ -18,11 +18,16 @@ Unified schema (final_dataset's): prompt, prompt_ko, focus, type, note, label.
   - note:  kept if present, else "".
 """
 import argparse
-import json
 import os
+import sys
+from pathlib import Path
 from typing import Dict, List
 
-FR_ROOT = "/data/home/mk05/FR"
+FR_ROOT = str(Path(__file__).resolve().parents[1])
+if FR_ROOT not in sys.path:
+    sys.path.insert(0, FR_ROOT)
+
+from util import read_jsonl, write_jsonl
 
 REFUSAL_LABELS = {"refusal", "deflection"}
 
@@ -38,11 +43,6 @@ def parse_args():
     p.add_argument("--gemini_phtest", default=f"{FR_ROOT}/outputs/remote_models/gemini-3.1-flash-lite/phtest/evaluation_results.jsonl")
     p.add_argument("--save_path", default=f"{FR_ROOT}/dataset/final/merged_dataset.jsonl")
     return p.parse_args()
-
-
-def read_jsonl(path: str) -> List[Dict]:
-    with open(path, encoding="utf-8") as f:
-        return [json.loads(line) for line in f if line.strip()]
 
 
 def record(prompt, prompt_ko, focus, type_, note, label) -> Dict:
@@ -85,7 +85,6 @@ def main():
         (args.gemini_oktest, "prompt", lambda r: "oktest"),             # no category -> source name
         (args.gemini_phtest, "Request", lambda r: "phtest"),           # Request is the English prompt
     ]:
-        name = os.path.basename(os.path.dirname(os.path.dirname(path)))  # model dir's benchmark subdir
         bench = os.path.basename(os.path.dirname(path))
         kept = 0
         for r in read_jsonl(path):
@@ -114,11 +113,7 @@ def main():
     ]
 
     merged = deduped_pseudo + harmful
-
-    os.makedirs(os.path.dirname(args.save_path), exist_ok=True)
-    with open(args.save_path, "w", encoding="utf-8") as f:
-        for rec in merged:
-            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    write_jsonl(args.save_path, merged)
 
     print("=== pseudo-harmful (label=safe) ===")
     print(f"  final k_idioms (all)         : {n_kidiom}")

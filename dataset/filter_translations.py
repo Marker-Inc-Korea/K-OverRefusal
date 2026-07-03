@@ -21,7 +21,7 @@ FR_ROOT = Path(__file__).resolve().parents[1]
 if str(FR_ROOT) not in sys.path:
     sys.path.insert(0, str(FR_ROOT))
 
-from mllm import VLMInferenceEngine
+from util import build_engine
 
 try:
     from translate_dataset import apply_translation_filter
@@ -55,27 +55,6 @@ def parse_args():
     return parser.parse_args()
 
 
-def build_backend_kwargs(args) -> Dict:
-    if args.filter_model_engine_backend == "vllm":
-        backend_kwargs = {
-            "tensor_parallel_size": args.filter_model_num_gpus,
-            "gpu_memory_utilization": args.gpu_memory_utilization,
-        }
-        if args.max_model_len is not None:
-            backend_kwargs["max_model_len"] = args.max_model_len
-        if args.max_num_seqs is not None:
-            backend_kwargs["max_num_seqs"] = args.max_num_seqs
-        if args.skip_mm_profiling:
-            backend_kwargs["skip_mm_profiling"] = True
-        return backend_kwargs
-    if args.filter_model_engine_backend in {"vllm-openai", "openrouter"}:
-        backend_kwargs = {}
-        if args.filter_model_backend_base_url is not None:
-            backend_kwargs["base_url"] = args.filter_model_backend_base_url
-        return backend_kwargs
-    return {}
-
-
 def main():
     args = parse_args()
 
@@ -90,10 +69,14 @@ def main():
     sources = [str(ex.get(args.source_column) or "") for ex in examples]
     translations = [str(ex.get(args.translation_column) or "") for ex in examples]
 
-    model = VLMInferenceEngine(
-        args.filter_model,
-        backend=args.filter_model_engine_backend,
-        backend_kwargs=build_backend_kwargs(args),
+    model = build_engine(
+        args.filter_model, args.filter_model_engine_backend,
+        num_gpus=args.filter_model_num_gpus,
+        gpu_memory_utilization=args.gpu_memory_utilization,
+        max_model_len=args.max_model_len,
+        max_num_seqs=args.max_num_seqs,
+        base_url=args.filter_model_backend_base_url,
+        skip_mm_profiling=args.skip_mm_profiling,
     )
 
     apply_translation_filter(

@@ -1,7 +1,6 @@
 import argparse
 import csv
 import json
-import os
 import re
 import sys
 from pathlib import Path
@@ -14,8 +13,8 @@ FR_ROOT = Path(__file__).resolve().parents[1]
 if str(FR_ROOT) not in sys.path:
     sys.path.insert(0, str(FR_ROOT))
 
-from mllm import GenerationArgs, UniversalGenParams, VLMInferenceEngine
-from util import batched
+from mllm import GenerationArgs, UniversalGenParams
+from util import batched, build_engine, ensure_parent_dir
 try:
     from generation_util import XSTEST_TRANSLATION_PROMPT, TRANSLATION_SYSTEM_PROMPT, TRANSLATION_FILTER_PROMPT
 except ImportError:
@@ -128,29 +127,6 @@ def load_examples(args) -> List[Dict]:
     return examples
 
 
-def build_backend_kwargs(args) -> Dict:
-    if args.model_engine_backend == "vllm":
-        backend_kwargs = {
-            "tensor_parallel_size": args.model_num_gpus,
-            "gpu_memory_utilization": args.gpu_memory_utilization,
-        }
-        if args.max_model_len is not None:
-            backend_kwargs["max_model_len"] = args.max_model_len
-        if args.max_num_seqs is not None:
-            backend_kwargs["max_num_seqs"] = args.max_num_seqs
-        return backend_kwargs
-
-    if args.model_engine_backend in {"vllm-openai", "openrouter"}:
-        backend_kwargs = {}
-        if args.model_backend_base_url is not None:
-            backend_kwargs["base_url"] = args.model_backend_base_url
-        return backend_kwargs
-
-    return {}
-
-
-
-
 _PUNCT = r"[.?!？。！]"
 
 
@@ -185,12 +161,6 @@ def parse_plain_translation(text: str) -> str:
     if len(t) >= 2 and t[0] == t[-1] and t[0] in "\"'`":
         t = t[1:-1].strip()
     return t
-
-
-def ensure_parent_dir(path: str):
-    parent_dir = os.path.dirname(path)
-    if parent_dir:
-        os.makedirs(parent_dir, exist_ok=True)
 
 
 _HANGUL = re.compile(r"[가-힣]")
@@ -379,11 +349,13 @@ def main():
     source_desc = args.data_file if args.data_file else f"{args.dataset_name} ({args.dataset_split} split)"
     print(f"Loaded {len(examples)} examples from {source_desc}")
 
-    backend_kwargs = build_backend_kwargs(args)
-    model = VLMInferenceEngine(
-        args.model,
-        backend=args.model_engine_backend,
-        backend_kwargs=backend_kwargs,
+    model = build_engine(
+        args.model, args.model_engine_backend,
+        num_gpus=args.model_num_gpus,
+        gpu_memory_utilization=args.gpu_memory_utilization,
+        max_model_len=args.max_model_len,
+        max_num_seqs=args.max_num_seqs,
+        base_url=args.model_backend_base_url,
     )
     gen_params = UniversalGenParams(
         n=1,

@@ -25,9 +25,13 @@ import os
 import sys
 from collections import Counter
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict
 
 FR_ROOT = Path(__file__).resolve().parents[1]
+if str(FR_ROOT) not in sys.path:
+    sys.path.insert(0, str(FR_ROOT))
+
+from util import read_jsonl, write_jsonl
 
 # xstest-native provenance type -> final mechanism category.
 XSTEST_TO_FINAL = {
@@ -55,11 +59,6 @@ COARSE = {
 
 def coarse(x: str) -> str:
     return COARSE.get(x, x)
-
-
-def read_jsonl(path: str) -> List[Dict]:
-    with open(path, encoding="utf-8") as f:
-        return [json.loads(line) for line in f if line.strip()]
 
 
 def parse_args():
@@ -130,10 +129,7 @@ def main():
             rec["type"] = final_mech[i]
         out.append(rec)
 
-    os.makedirs(os.path.dirname(args.save_path), exist_ok=True)
-    with open(args.save_path, "w", encoding="utf-8") as f:
-        for rec in out:
-            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    write_jsonl(args.save_path, out)
 
     safe_n = sum(1 for r in out if r["label"] == "safe")
     print(f"\nWrote {len(out)} rows ({safe_n} pseudo-harmful + {len(out)-safe_n} harmful) -> {args.save_path}")

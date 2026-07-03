@@ -4,14 +4,13 @@ import sys
 from pathlib import Path
 
 from datasets import Dataset
-from tqdm import tqdm
 
 FR_ROOT = Path(__file__).resolve().parents[1]
 if str(FR_ROOT) not in sys.path:
     sys.path.insert(0, str(FR_ROOT))
 
-from mllm import VLMInferenceEngine, UniversalGenParams, GenerationArgs
-from util import batched
+from mllm import UniversalGenParams
+from util import build_engine, run_batch_generate
 
 
 def parse_args():
@@ -51,8 +50,6 @@ def parse_args():
         model_name = args.model.rstrip("/").split("/")[-1]
         args.save_dir = os.path.join("outputs/remote_models", model_name, args.benchmark)
     return args
-
-
 
 
 # Models whose usable context we cap below their advertised window (e.g. for memory).
@@ -100,29 +97,14 @@ def main():
     args = parse_args()
     os.makedirs(args.save_dir, exist_ok=True)
 
-    if args.model_engine_backend == "vllm":
-        backend_kwargs = {
-            "tensor_parallel_size": args.model_num_gpus,
-            "gpu_memory_utilization": args.gpu_memory_utilization,
-        }
-        eff_max_len = derive_max_model_len(args.model, args.max_model_len)
-        if eff_max_len is not None:
-            backend_kwargs["max_model_len"] = eff_max_len
-        if args.max_num_seqs is not None:
-            backend_kwargs["max_num_seqs"] = args.max_num_seqs
-        if args.skip_mm_profiling:
-            backend_kwargs["skip_mm_profiling"] = True
-    elif args.model_engine_backend in {"vllm-openai", "openrouter"}:
-        backend_kwargs = {}
-        if args.model_backend_base_url is not None:
-            backend_kwargs["base_url"] = args.model_backend_base_url
-    else:
-        backend_kwargs = {}
-
-    model = VLMInferenceEngine(
-        args.model,
-        backend=args.model_engine_backend,
-        backend_kwargs=backend_kwargs,
+    model = build_engine(
+        args.model, args.model_engine_backend,
+        num_gpus=args.model_num_gpus,
+        gpu_memory_utilization=args.gpu_memory_utilization,
+        max_model_len=derive_max_model_len(args.model, args.max_model_len),
+        max_num_seqs=args.max_num_seqs,
+        base_url=args.model_backend_base_url,
+        skip_mm_profiling=args.skip_mm_profiling,
     )
 
     dataset = Dataset.from_json(args.data_dir)
@@ -141,20 +123,8 @@ def main():
         gen_params_kwargs["reasoning"] = args.reasoning
     gen_params = UniversalGenParams(**gen_params_kwargs)
 
-    instructions = dataset[args.instruction_column]
-    inputs = [[instr] for instr in instructions]
-
-    responses = []
-    for batch_inputs in tqdm(list(batched(inputs, args.batch_size)), desc="Inference"):
-        gen_args = GenerationArgs(
-            engine_input=batch_inputs,
-            gen_params=gen_params,
-            is_multi_turn_input=False,
-            is_batch_input=True,
-            add_generation_prompt=True,
-        )
-        outputs = model.generate(gen_args)
-        responses.extend(o.output_seqs[0] if o.output_seqs else "" for o in outputs)
+    inputs = [[instr] for instr in dataset[args.instruction_column]]
+    responses = run_batch_generate(model, inputs, gen_params, args.batch_size, desc="Inference")
 
     results = [{**example, "response": resp} for example, resp in zip(dataset, responses)]
     output_dataset = Dataset.from_list(results)

@@ -17,20 +17,17 @@ Schema in / out: reads merged_dataset.jsonl; writes one row per classified promp
 """
 import argparse
 import json
-import os
 import re
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional
-
-from tqdm import tqdm
+from typing import Dict, Optional
 
 FR_ROOT = Path(__file__).resolve().parents[1]
 if str(FR_ROOT) not in sys.path:
     sys.path.insert(0, str(FR_ROOT))
 
-from mllm import GenerationArgs, UniversalGenParams, VLMInferenceEngine
-from util import read_jsonl, run_batch_generate
+from mllm import UniversalGenParams
+from util import read_jsonl, write_jsonl, build_engine, run_batch_generate
 
 # xstest-native mechanism types already on the target axis (kept as-is, but still
 # sent to the model for a calibration check). k_idioms is skipped entirely.
@@ -102,26 +99,6 @@ def parse_args():
     return p.parse_args()
 
 
-
-
-def build_backend_kwargs(args) -> Dict:
-    if args.model_engine_backend == "vllm":
-        kw = {
-            "tensor_parallel_size": args.model_num_gpus,
-            "gpu_memory_utilization": args.gpu_memory_utilization,
-        }
-        if args.max_model_len is not None:
-            kw["max_model_len"] = args.max_model_len
-        if args.max_num_seqs is not None:
-            kw["max_num_seqs"] = args.max_num_seqs
-        return kw
-    if args.model_engine_backend in {"vllm-openai", "openrouter"}:
-        return {"base_url": args.model_backend_base_url} if args.model_backend_base_url else {}
-    return {}
-
-
-
-
 _VALID = set(CATEGORIES) | {"OTHER"}
 
 
@@ -143,8 +120,6 @@ def parse_category(raw: str) -> Optional[Dict[str, str]]:
     return None
 
 
-
-
 def main():
     args = parse_args()
     rows = read_jsonl(args.merged_path)
@@ -156,8 +131,14 @@ def main():
     print(f"Classifying {len(targets)} pseudo-harmful prompts "
           f"({sum(r['type'] in XSTEST_MECHANISM for _, r in targets)} xstest-native calibration rows included).")
 
-    backend_kwargs = build_backend_kwargs(args)
-    model = VLMInferenceEngine(args.model, backend=args.model_engine_backend, backend_kwargs=backend_kwargs)
+    model = build_engine(
+        args.model, args.model_engine_backend,
+        num_gpus=args.model_num_gpus,
+        gpu_memory_utilization=args.gpu_memory_utilization,
+        max_model_len=args.max_model_len,
+        max_num_seqs=args.max_num_seqs,
+        base_url=args.model_backend_base_url,
+    )
     gen_params = UniversalGenParams(
         n=1, max_new_tokens=args.max_new_tokens, temperature=args.temperature,
         top_p=args.top_p, seed=args.seed, reasoning=args.reasoning,
@@ -198,10 +179,7 @@ def main():
             "raw": res.get("raw", ""),
         })
 
-    os.makedirs(os.path.dirname(args.save_path), exist_ok=True)
-    with open(args.save_path, "w", encoding="utf-8") as f:
-        for rec in records:
-            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    write_jsonl(args.save_path, records)
 
     from collections import Counter
     dist = Counter(rec["mechanism"] for rec in records)
