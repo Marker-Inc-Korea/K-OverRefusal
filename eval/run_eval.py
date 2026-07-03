@@ -11,6 +11,7 @@ if str(FR_ROOT) not in sys.path:
     sys.path.insert(0, str(FR_ROOT))
 
 from mllm import VLMInferenceEngine, UniversalGenParams, GenerationArgs
+from util import batched
 
 try:
     from eval.eval_util import (
@@ -77,11 +78,6 @@ def parse_args():
         low = args.evaluator.lower()
         args.evaluator_type = "ksafeguard" if ("ksafeguard" in low or "modguard" in low) else "llm_judge"
     return args
-
-
-def batched(items, batch_size):
-    for start in range(0, len(items), batch_size):
-        yield items[start: start + batch_size]
 
 
 def main():

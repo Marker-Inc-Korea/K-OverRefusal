@@ -14,6 +14,7 @@ if str(FR_ROOT) not in sys.path:
     sys.path.insert(0, str(FR_ROOT))
 
 from mllm import GenerationArgs, UniversalGenParams, VLMInferenceEngine
+from util import run_batch_generate
 try:
     from generation_util import SEED_INSTRUCTION_GENERATION_PROMPT
 except ImportError:
@@ -114,9 +115,6 @@ def build_backend_kwargs(args) -> Dict:
     return {}
 
 
-def batched(items: list, batch_size: int):
-    for start in range(0, len(items), batch_size):
-        yield items[start: start + batch_size]
 
 
 def build_generation_prompt(pseudo_instruction: str, harmful_keyword: str) -> str:
@@ -244,21 +242,6 @@ def initialize_output_files(args):
                 pass
 
 
-def run_batch_generate(model, prompts: List[str], gen_params, batch_size: int) -> List[str]:
-    results = []
-    for batch in tqdm(list(batched(prompts, batch_size)), desc="  LLM batch"):
-        gen_args = GenerationArgs(
-            engine_input=batch,
-            gen_params=gen_params,
-            is_multi_turn_input=False,
-            is_batch_input=True,
-            add_generation_prompt=True,
-        )
-        outputs = model.generate(gen_args)
-        results.extend(
-            output.output_seqs[0] if output.output_seqs else "" for output in outputs
-        )
-    return results
 
 
 def main():

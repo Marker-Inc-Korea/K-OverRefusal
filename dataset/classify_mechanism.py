@@ -30,6 +30,7 @@ if str(FR_ROOT) not in sys.path:
     sys.path.insert(0, str(FR_ROOT))
 
 from mllm import GenerationArgs, UniversalGenParams, VLMInferenceEngine
+from util import read_jsonl, run_batch_generate
 
 # xstest-native mechanism types already on the target axis (kept as-is, but still
 # sent to the model for a calibration check). k_idioms is skipped entirely.
@@ -101,9 +102,6 @@ def parse_args():
     return p.parse_args()
 
 
-def read_jsonl(path: str) -> List[Dict]:
-    with open(path, encoding="utf-8") as f:
-        return [json.loads(line) for line in f if line.strip()]
 
 
 def build_backend_kwargs(args) -> Dict:
@@ -122,9 +120,6 @@ def build_backend_kwargs(args) -> Dict:
     return {}
 
 
-def batched(items: list, n: int):
-    for s in range(0, len(items), n):
-        yield items[s:s + n]
 
 
 _VALID = set(CATEGORIES) | {"OTHER"}
@@ -148,19 +143,6 @@ def parse_category(raw: str) -> Optional[Dict[str, str]]:
     return None
 
 
-def run_batch_generate(model, prompts: List[str], gen_params, batch_size: int) -> List[str]:
-    results = []
-    for batch in tqdm(list(batched(prompts, batch_size)), desc="  classify batch"):
-        gen_args = GenerationArgs(
-            engine_input=batch,
-            gen_params=gen_params,
-            is_multi_turn_input=False,
-            is_batch_input=True,
-            add_generation_prompt=True,
-        )
-        outputs = model.generate(gen_args)
-        results.extend(o.output_seqs[0] if o.output_seqs else "" for o in outputs)
-    return results
 
 
 def main():

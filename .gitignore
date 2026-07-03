@@ -73,3 +73,6 @@ temp/
 Thumbs.db
 *.swp
 *.swo
+
+# Legacy (old/intermediate code, archived locally)
+legacy/

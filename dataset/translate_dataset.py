@@ -15,6 +15,7 @@ if str(FR_ROOT) not in sys.path:
     sys.path.insert(0, str(FR_ROOT))
 
 from mllm import GenerationArgs, UniversalGenParams, VLMInferenceEngine
+from util import batched
 try:
     from generation_util import XSTEST_TRANSLATION_PROMPT, TRANSLATION_SYSTEM_PROMPT, TRANSLATION_FILTER_PROMPT
 except ImportError:
@@ -148,9 +149,6 @@ def build_backend_kwargs(args) -> Dict:
     return {}
 
 
-def batched(items: list, batch_size: int):
-    for start in range(0, len(items), batch_size):
-        yield items[start: start + batch_size]
 
 
 _PUNCT = r"[.?!？。！]"

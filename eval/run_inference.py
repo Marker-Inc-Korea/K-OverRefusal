@@ -11,6 +11,7 @@ if str(FR_ROOT) not in sys.path:
     sys.path.insert(0, str(FR_ROOT))
 
 from mllm import VLMInferenceEngine, UniversalGenParams, GenerationArgs
+from util import batched
 
 
 def parse_args():
@@ -52,9 +53,6 @@ def parse_args():
     return args
 
 
-def batched(items, batch_size):
-    for start in range(0, len(items), batch_size):
-        yield items[start: start + batch_size]
 
 
 # Models whose usable context we cap below their advertised window (e.g. for memory).
