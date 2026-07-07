@@ -1,0 +1,39 @@
+{
+  "total": 485,
+  "safe": 185,
+  "unsafe": 300,
+  "new_harmful": 250,
+  "new_harmful_by_domain": {
+    "violence": 25,
+    "privacy_surveil": 34,
+    "drugs": 18,
+    "financial": 34,
+    "weapons": 14,
+    "illegal_other": 53,
+    "chem_bio": 16,
+    "hate_harass": 15,
+    "illegal_goods": 13,
+    "fraud_forgery": 17,
+    "misinfo": 3,
+    "cyber": 8
+  },
+  "new_harmful_by_source": {
+    "strongreject": 56,
+    "salad_bench": 106,
+    "maliciousinstruct": 37,
+    "harmbench": 51
+  },
+  "matched_benign_mechanism": {
+    "legality_framing": 56,
+    "privacy": 40,
+    "other": 27,
+    "euphemism": 39,
+    "benign_purpose": 25,
+    "safe_contexts": 36,
+    "harmless_analog": 27
+  },
+  "similarity_mean": 0.8639,
+  "similarity_min": 0.7815,
+  "internal_dup_prompt_ko": 0,
+  "new_harmful_KS_train_overlap": 0
+}
