@@ -112,11 +112,14 @@ def main():
     args = parse_args()
     os.makedirs(args.save_dir, exist_ok=True)
 
+    # Hybrid-thinking switch. Most templates use `enable_thinking` (Qwen3.x, EXAONE-4.x,
+    # GLM-4.x, gemma-4, Trillion); HyperCLOVAX-SEED-Think uses `thinking`. Unknown keys are
+    # ignored by Jinja, so we pass both.
     chat_template_kwargs = {}
     if args.thinking == "off":
-        chat_template_kwargs["enable_thinking"] = False
+        chat_template_kwargs.update(enable_thinking=False, thinking=False)
     elif args.thinking == "on":
-        chat_template_kwargs["enable_thinking"] = True
+        chat_template_kwargs.update(enable_thinking=True, thinking=True)
     model = build_engine(
         args.model, args.model_engine_backend,
         chat_template_kwargs=chat_template_kwargs,
