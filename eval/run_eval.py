@@ -85,6 +85,7 @@ def main():
 
     evaluator = build_engine(
         args.evaluator, args.evaluator_engine_backend,
+        strip_reasoning=False,   # judge path unchanged (skip_special_tokens=True, raw text)
         num_gpus=args.evaluator_num_gpus,
         gpu_memory_utilization=args.gpu_memory_utilization,
         max_model_len=args.max_model_len,

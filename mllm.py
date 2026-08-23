@@ -210,6 +210,48 @@ class VLMInferenceOutput:
        self.usage = usage
 
     
+# ---- reasoning-block handling (shared by the vLLM engine and the HF text runner) ----
+_THINK_OPEN_RE = re.compile(r"<think>|<\|channel>thought\n?", re.DOTALL)
+_THINK_CLOSE_RE = re.compile(r"</think>|<channel\|>", re.DOTALL)
+_THINK_BLOCK_RE = re.compile(r"(?:<think>|<\|channel>thought\n?)(.*?)(?:</think>|<channel\|>)", re.DOTALL)
+
+
+def split_reasoning(text: str, special_tokens=(), prompt_text: str = None):
+    """Split a raw (special-token-preserving) completion into (final_answer, reasoning).
+    Handles <think>...</think> (Qwen3.x / EXAONE-4.x / GLM-4.x / HyperCLOVAX-Think / kanana /
+    Trillion / Motif) and gemma-4's <|channel>thought ... <channel|>. Thinking-on templates
+    end the *prompt* with '<think>\n', so the completion may start inside the block and only
+    the closer appears ('reasoning</think>answer'); pass prompt_text so a completion that ran
+    out of tokens while still thinking is classified as reasoning, not answer. Remaining
+    special tokens (eos etc.) are stripped from the answer."""
+    if not text:
+        return "", ""
+    reasoning_parts = []
+    out = text
+    prompt_opened = bool(prompt_text) and prompt_text.rstrip().endswith("<think>")
+    m = _THINK_CLOSE_RE.search(out)
+    if m and not _THINK_OPEN_RE.search(out[:m.start()]):
+        reasoning_parts.append(out[:m.start()])
+        out = out[m.end():]
+    elif prompt_opened and not m:
+        reasoning_parts.append(out)
+        out = ""
+
+    def _grab(mm):
+        reasoning_parts.append(mm.group(1))
+        return ""
+    out = _THINK_BLOCK_RE.sub(_grab, out)
+    m = _THINK_OPEN_RE.search(out)
+    if m:  # opened but never closed -> truncated inside the reasoning block
+        reasoning_parts.append(out[m.end():])
+        out = out[:m.start()]
+    for t in sorted(set(special_tokens), key=len, reverse=True):
+        if t and t in out:
+            out = out.replace(t, "")
+    reasoning = "\n".join(r.strip() for r in reasoning_parts if r.strip())
+    return out.strip(), reasoning
+
+
 class VLMInferenceEngine:
     # gpt-oss (vllm offline backend) emits raw Harmony-formatted text, e.g.
     # "<|channel|>analysis<|message|>...<|start|>assistant<|channel|>final<|message|>...<|return|>"
@@ -218,13 +260,26 @@ class VLMInferenceEngine:
         re.DOTALL,
     )
 
-    def __init__(self, model_id, backend, backend_kwargs={}):
+    # Reasoning-model output handling (vllm offline backend). Thinking models
+    # (Qwen3.x, EXAONE-4.x, GLM-4.x, HyperCLOVAX-Think, gemma-4 ...) emit a
+    # chain-of-thought block before the answer. vLLM's default
+    # skip_special_tokens=True silently drops the <think>/</think> markers (they
+    # are special tokens) and glues the reasoning text onto the answer, so we keep
+    # special tokens, split the block off ourselves, then strip the remaining
+    # special tokens. `chat_template_kwargs` (e.g. {"enable_thinking": False}) is
+    # forwarded to the chat template; templates that don't know the key ignore it.
+
+    def __init__(self, model_id, backend, backend_kwargs={}, chat_template_kwargs=None,
+                 strip_reasoning=True):
         self.model_id = model_id
         self.backend = backend
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self._image_cache = {}
         self._image_b64_cache = {}
         self.is_internvl = False
+        self.chat_template_kwargs = dict(chat_template_kwargs or {})
+        self.strip_reasoning = strip_reasoning
+        self._special_tokens = None
         self._load_model(backend_kwargs)
 
     def _load_model(self, backend_kwargs):
@@ -368,12 +423,37 @@ class VLMInferenceEngine:
             return final_msgs[-1].strip()
         return matches[-1][1].strip()
 
+    def _vllm_special_tokens(self):
+        if self._special_tokens is None:
+            toks = []
+            try:
+                tok = self.model.get_tokenizer()
+                toks = list(getattr(tok, "all_special_tokens", []) or [])
+                extra = getattr(tok, "additional_special_tokens", None) or []
+                toks += [t for t in extra if t not in toks]
+            except Exception as e:
+                print(Fore.YELLOW + f"[warn] could not read tokenizer special tokens: {e}")
+            # longest first so e.g. '<|im_end|>' is removed before any shorter overlap
+            self._special_tokens = sorted(set(toks), key=len, reverse=True)
+        return self._special_tokens
+
+    def _split_reasoning(self, text: str, prompt_text: str = None):
+        """See split_reasoning(); uses this engine's tokenizer special tokens."""
+        return split_reasoning(text, self._vllm_special_tokens(), prompt_text=prompt_text)
+
+    def _extract_harmony_reasoning(self, text: str) -> str:
+        """Concatenate the non-final (analysis/commentary) channels of a raw Harmony output."""
+        if not text:
+            return ""
+        matches = self._HARMONY_CHANNEL_RE.findall(text)
+        return "\n".join(c.strip() for ch, c in matches if ch != "final" and c.strip())
+
     def _vllm_generate(self, gen_args: GenerationArgs) -> List[VLMInferenceOutput]:
         prompts = self._vllm_openai_input_preprocessor(gen_args)
         gen_params = gen_args.gen_params.get_vllm_params()
-        if self._is_gpt_oss():
-            # Keep Harmony special tokens (<|channel|>, <|message|>, ...) in the raw output
-            # so the channels can be split apart; vLLM strips them by default.
+        if self._is_gpt_oss() or self.strip_reasoning:
+            # Keep special tokens (Harmony <|channel|>/<|message|>, <think>/</think>, ...)
+            # in the raw output so reasoning can be split off; vLLM strips them by default.
             gen_params.skip_special_tokens = False
         model_outputs = self._vllm_inference(prompts, gen_args=gen_args, gen_params=gen_params)
         assert len(model_outputs) == len(prompts), "Number of inputs and outputs should be the same."
@@ -559,9 +639,12 @@ class VLMInferenceEngine:
 
     def _vllm_inference(self, prompts, gen_args, gen_params) -> List[RequestOutput]:
         chat_kwargs = {}
+        ct_kwargs = dict(self.chat_template_kwargs)
         if self._is_gpt_oss():
             # Harmony's developer message encodes reasoning effort via chat template kwargs.
-            chat_kwargs["chat_template_kwargs"] = {"reasoning_effort": gen_args.gen_params.reasoning}
+            ct_kwargs["reasoning_effort"] = gen_args.gen_params.reasoning
+        if ct_kwargs:
+            chat_kwargs["chat_template_kwargs"] = ct_kwargs
 
         if gen_args.is_batch_input or len(prompts) == 1:
             model_output = self.model.chat(prompts, gen_params, **chat_kwargs)
@@ -735,19 +818,26 @@ class VLMInferenceEngine:
             prompt_logprobs = getattr(request_output, "prompt_logprobs", None)
 
             generation_output = sorted(request_output.outputs, key=lambda x: x.index)
-            seqs, logprobs, cumulative, finish = [], [], [], []
+            seqs, logprobs, cumulative, finish, reasonings = [], [], [], [], []
             for s in generation_output:
                 text = getattr(s, "text", "")
+                reasoning = ""
                 if self._is_gpt_oss():
+                    raw = text
                     text = self._extract_harmony_final(text)
+                    reasoning = self._extract_harmony_reasoning(raw)
+                elif self.strip_reasoning:
+                    text, reasoning = self._split_reasoning(
+                        text, prompt_text=getattr(request_output, "prompt", None))
                 seqs.append(text)
+                reasonings.append(reasoning)
                 logprobs.append(getattr(s, "logprobs", None))
                 cum = getattr(s, "cumulative_logprob", None)
                 if cum is None: cum = getattr(s, "cumulative_logprobs", None)
                 cumulative.append(cum)
                 finish.append(getattr(s, "finish_reason", None))
 
-            outputs.append(VLMInferenceOutput(
+            out = VLMInferenceOutput(
                 output_seqs=seqs,
                 output_objects=generation_output,
                 input_prompt=getattr(request_output, "prompt", None),
@@ -756,7 +846,9 @@ class VLMInferenceEngine:
                 finish_reasons=finish,
                 latency=latency,
                 prompt_logprobs=prompt_logprobs
-            ))
+            )
+            out.reasoning_seqs = reasonings
+            outputs.append(out)
         return outputs
     
     def _vllm_openai_parse_output(self, client_outputs, prompts):

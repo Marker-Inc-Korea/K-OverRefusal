@@ -31,7 +31,8 @@ def batched(items, batch_size):
 
 def build_backend_kwargs(backend: str, num_gpus: int = 1, gpu_memory_utilization: float = 0.85,
                          max_model_len=None, max_num_seqs=None, base_url=None,
-                         skip_mm_profiling: bool = False) -> Dict:
+                         skip_mm_profiling: bool = False, quantization=None,
+                         moe_backend=None) -> Dict:
     if backend == "vllm":
         kw = {"tensor_parallel_size": num_gpus,
               "gpu_memory_utilization": gpu_memory_utilization}
@@ -41,25 +42,36 @@ def build_backend_kwargs(backend: str, num_gpus: int = 1, gpu_memory_utilization
             kw["max_num_seqs"] = max_num_seqs
         if skip_mm_profiling:
             kw["skip_mm_profiling"] = True
+        if quantization:  # e.g. "fp8" = on-the-fly weight quantization (70B-class on one 96GB GPU)
+            kw["quantization"] = quantization
+        if moe_backend:   # e.g. "triton" — the portable MoE kernel on SM 12.0 (Blackwell workstation)
+            kw["moe_backend"] = moe_backend
         return kw
     if backend in {"vllm-openai", "openrouter"}:
         return {"base_url": base_url} if base_url is not None else {}
     return {}
 
 
-def build_engine(model_id: str, backend: str = "vllm", **backend_options):
-    """Construct a VLMInferenceEngine; backend_options as in build_backend_kwargs."""
+def build_engine(model_id: str, backend: str = "vllm", chat_template_kwargs=None,
+                 strip_reasoning: bool = True, **backend_options):
+    """Construct a VLMInferenceEngine; backend_options as in build_backend_kwargs.
+    chat_template_kwargs (e.g. {"enable_thinking": False}) are forwarded to the chat
+    template; strip_reasoning splits <think>-style blocks off vLLM completions."""
     from mllm import VLMInferenceEngine
     return VLMInferenceEngine(model_id, backend=backend,
-                              backend_kwargs=build_backend_kwargs(backend, **backend_options))
+                              backend_kwargs=build_backend_kwargs(backend, **backend_options),
+                              chat_template_kwargs=chat_template_kwargs,
+                              strip_reasoning=strip_reasoning)
 
 
 def run_batch_generate(model, prompts: List, gen_params, batch_size: int,
-                       desc: str = "  LLM batch") -> List[str]:
-    """Batched generation over a vLLM engine; returns one string per prompt."""
+                       desc: str = "  LLM batch", return_meta: bool = False):
+    """Batched generation over a vLLM engine; returns one string per prompt.
+    With return_meta=True returns one dict per prompt instead:
+    {"response", "reasoning" (split-off chain-of-thought, "" if none), "finish_reason"}."""
     from tqdm import tqdm
     from mllm import GenerationArgs
-    results: List[str] = []
+    results = []
     for batch in tqdm(list(batched(prompts, batch_size)), desc=desc):
         gen_args = GenerationArgs(
             engine_input=batch,
@@ -69,5 +81,13 @@ def run_batch_generate(model, prompts: List, gen_params, batch_size: int,
             add_generation_prompt=True,
         )
         outputs = model.generate(gen_args)
-        results.extend(o.output_seqs[0] if o.output_seqs else "" for o in outputs)
+        for o in outputs:
+            text = o.output_seqs[0] if o.output_seqs else ""
+            if not return_meta:
+                results.append(text)
+                continue
+            reasoning = getattr(o, "reasoning_seqs", None) or [""]
+            finish = getattr(o, "finish_reasons", None) or [None]
+            results.append({"response": text, "reasoning": reasoning[0] or "",
+                            "finish_reason": finish[0]})
     return results

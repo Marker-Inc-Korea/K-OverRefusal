@@ -27,6 +27,21 @@ def parse_args():
                              "multimodal checkpoints (e.g. EXAONE-4.x) whose vision tower is incompatible "
                              "with the installed vLLM version and crashes during profiling. We only ever "
                              "send text, so this is a harmless no-op for text-only models.")
+    parser.add_argument("--quantization", type=str, default=None,
+                        help="vLLM quantization, e.g. 'fp8' for on-the-fly FP8 weight quantization "
+                             "(lets a 70B-class bf16 checkpoint run on a single 96GB GPU).")
+    parser.add_argument("--moe_backend", type=str, default=None,
+                        help="vLLM MoE kernel backend override (e.g. 'triton' for Blackwell SM 12.0).")
+    parser.add_argument("--thinking", type=str, default="off", choices=["off", "on", "default"],
+                        help="Reasoning/thinking mode for hybrid-thinking models. 'off' (default) passes "
+                             "enable_thinking=False to the chat template (Qwen3.x, EXAONE-4.x, GLM-4.x, "
+                             "gemma-4, ...; ignored by templates without the switch); 'on' passes "
+                             "enable_thinking=True; 'default' leaves the template's default. "
+                             "Any <think>...</think> block still present in the completion is split off "
+                             "into the 'reasoning' column so 'response' holds only the final answer.")
+    parser.add_argument("--keep_reasoning_in_response", action="store_true",
+                        help="Do not split <think> blocks off; 'response' is the raw completion "
+                             "(legacy behaviour, except special tokens are kept).")
 
     parser.add_argument("--data_dir", type=str, required=True)
     parser.add_argument("--save_dir", type=str, default=None)
@@ -55,7 +70,7 @@ def parse_args():
 # Models whose usable context we cap below their advertised window (e.g. for memory).
 # Substring match against the model id.
 _MODEL_MAX_LEN_CAPS = {
-    "HyperCLOVAX": 4096,
+    "HyperCLOVAX-SEED-Text-Instruct": 4096,   # the small 0.5B/1.5B SEED-Text models only
 }
 
 
@@ -97,15 +112,26 @@ def main():
     args = parse_args()
     os.makedirs(args.save_dir, exist_ok=True)
 
+    chat_template_kwargs = {}
+    if args.thinking == "off":
+        chat_template_kwargs["enable_thinking"] = False
+    elif args.thinking == "on":
+        chat_template_kwargs["enable_thinking"] = True
     model = build_engine(
         args.model, args.model_engine_backend,
+        chat_template_kwargs=chat_template_kwargs,
+        strip_reasoning=not args.keep_reasoning_in_response,
         num_gpus=args.model_num_gpus,
         gpu_memory_utilization=args.gpu_memory_utilization,
         max_model_len=derive_max_model_len(args.model, args.max_model_len),
         max_num_seqs=args.max_num_seqs,
         base_url=args.model_backend_base_url,
         skip_mm_profiling=args.skip_mm_profiling,
+        quantization=args.quantization,
+        moe_backend=args.moe_backend,
     )
+    print(f"[info] thinking={args.thinking} chat_template_kwargs={chat_template_kwargs} "
+          f"strip_reasoning={not args.keep_reasoning_in_response} quantization={args.quantization}")
 
     dataset = Dataset.from_json(args.data_dir)
     if args.max_num_examples is not None:
@@ -124,10 +150,20 @@ def main():
     gen_params = UniversalGenParams(**gen_params_kwargs)
 
     inputs = [[instr] for instr in dataset[args.instruction_column]]
-    responses = run_batch_generate(model, inputs, gen_params, args.batch_size, desc="Inference")
+    outs = run_batch_generate(model, inputs, gen_params, args.batch_size, desc="Inference",
+                              return_meta=True)
 
-    results = [{**example, "response": resp} for example, resp in zip(dataset, responses)]
+    # 'response' = final answer (what the judge sees); 'reasoning' = split-off thinking
+    # block ("" when none); 'finish_reason' = 'stop' | 'length' (truncated).
+    results = [{**example, "response": o["response"], "reasoning": o["reasoning"],
+                "finish_reason": o["finish_reason"]}
+               for example, o in zip(dataset, outs)]
     output_dataset = Dataset.from_list(results)
+    n_reason = sum(1 for o in outs if o["reasoning"])
+    n_trunc = sum(1 for o in outs if o["finish_reason"] == "length")
+    n_empty = sum(1 for o in outs if not o["response"].strip())
+    print(f"[info] outputs: {len(outs)} | with reasoning block: {n_reason} | "
+          f"truncated (finish_reason=length): {n_trunc} | empty response: {n_empty}")
 
     save_path = os.path.join(args.save_dir, "inference_outputs.jsonl")
     output_dataset.to_json(save_path, lines=True, force_ascii=False)
