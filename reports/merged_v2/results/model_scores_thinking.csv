@@ -1,0 +1,3 @@
+model,safe_compliance,safe_overrefusal,unsafe_refusal,behavior_acc,refusal_f1,kidiom_comp,kidiom_refusal,harm_comp,harm_refusal
+EXAONE-4.5-33B,0.5405,0.4595,0.87,0.7443,0.808,0.58,0.94,0.5259,0.856
+HyperCLOVAX-SEED-Think-32B,0.4541,0.5459,0.8967,0.7278,0.803,0.62,0.94,0.3926,0.888

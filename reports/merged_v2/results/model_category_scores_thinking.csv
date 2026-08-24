@@ -1,0 +1,3 @@
+model,n,truncated,empty_response,benign_purpose,euphemism,harmless_analog,k_idioms,legality_framing,other,privacy,safe_contexts
+EXAONE-4.5-33B,485,4,3,0.5,0.5,0.6429,0.58,0.4483,0.5,0.4783,0.6667
+HyperCLOVAX-SEED-Think-32B,485,0,0,0.5,0.25,0.2857,0.62,0.4138,0.3571,0.4783,0.4286
