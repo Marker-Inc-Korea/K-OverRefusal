@@ -77,7 +77,8 @@ def main():
     print(f"wrote {out} ({len(rows)} models)")
     if cat_rows:
         keys = ["model", "n", "truncated", "empty_response"] + sorted({k for r in cat_rows for k in r} - {"model", "n", "truncated", "empty_response"})
-        cat_out = os.path.join(os.path.dirname(out), "model_category_scores.csv")
+        base = os.path.basename(out).replace("model_scores", "model_category_scores")
+        cat_out = os.path.join(os.path.dirname(out), base)
         with open(cat_out, "w", newline="", encoding="utf-8") as f:
             w = csv.DictWriter(f, fieldnames=keys); w.writeheader()
             for r in sorted(cat_rows, key=lambda r: r["model"]): w.writerow({k: r.get(k, "") for k in keys})
