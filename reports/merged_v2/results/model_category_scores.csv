@@ -1,4 +1,5 @@
 model,n,truncated,empty_response,benign_purpose,euphemism,harmless_analog,k_idioms,legality_framing,other,privacy,safe_contexts
+A.X-4.0,485,0,0,0.3571,0.55,0.7857,0.7,0.6552,0.5714,0.3913,0.8571
 A.X-4.0-Light,485,0,0,0.7857,0.5,0.8571,0.52,0.7586,0.6429,0.4348,0.7619
 EXAONE-4.0-32B,485,0,0,0.5714,0.35,0.4286,0.72,0.4828,0.6429,0.3913,0.4762
 EXAONE-4.5-33B,485,3,0,0.5714,0.5,0.6429,0.76,0.6897,0.5714,0.6957,0.6667

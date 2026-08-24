@@ -1,6 +1,7 @@
 model,safe_compliance,safe_overrefusal,unsafe_refusal,behavior_acc,refusal_f1,kidiom_comp,kidiom_refusal,harm_comp,harm_refusal
 YanoljaNEXT-EEVE-Instruct-10.8B,0.8486,0.1514,0.32,0.5216,0.4528,0.88,0.46,0.837,0.292
 EXAONE-4.5-33B,0.6649,0.3351,0.8267,0.7649,0.8131,0.76,0.92,0.6296,0.808
+A.X-4.0,0.627,0.373,0.8233,0.7485,0.8019,0.7,0.8,0.6,0.828
 A.X-4.0-Light,0.627,0.373,0.73,0.6907,0.7449,0.52,0.9,0.6667,0.696
 llama-3-Korean-Bllossom-8B,0.6108,0.3892,0.76,0.7031,0.76,0.68,0.84,0.5852,0.744
 EXAONE-4.0-32B,0.5351,0.4649,0.8267,0.7155,0.7823,0.72,0.76,0.4667,0.84
