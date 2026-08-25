@@ -77,6 +77,32 @@ def _compat_config(model_id):
         setattr(mu, name, _make(fn, accepted))
     print("[compat] masking_utils kwargs shim installed")
 
+    # transformers 5.x dropped "eager" from ALL_ATTENTION_FUNCTIONS (models now carry their
+    # own eager fn); 4.5x-era remote code indexes the registry directly. Register a plain
+    # softmax attention under "eager" (GQA-aware, bool or additive masks, v_dim != qk_dim ok).
+    from transformers.modeling_utils import ALL_ATTENTION_FUNCTIONS
+    if "eager" not in ALL_ATTENTION_FUNCTIONS:
+        import torch.nn.functional as F
+
+        def _eager_attention_forward(module, query, key, value, attention_mask, scaling=None,
+                                     dropout=0.0, **kwargs):
+            n_rep = query.shape[1] // key.shape[1]
+            if n_rep > 1:
+                key = key.repeat_interleave(n_rep, dim=1)
+                value = value.repeat_interleave(n_rep, dim=1)
+            if scaling is None:
+                scaling = query.shape[-1] ** -0.5
+            attn = torch.matmul(query, key.transpose(2, 3)) * scaling
+            if attention_mask is not None:
+                m = attention_mask[:, :, :, : key.shape[-2]]
+                attn = attn.masked_fill(~m, float("-inf")) if m.dtype == torch.bool else attn + m
+            attn = F.softmax(attn, dim=-1, dtype=torch.float32).to(query.dtype)
+            attn = F.dropout(attn, p=dropout, training=module.training)
+            out = torch.matmul(attn, value).transpose(1, 2).contiguous()
+            return out, attn
+        ALL_ATTENTION_FUNCTIONS["eager"] = _eager_attention_forward
+        print("[compat] registered generic eager attention in ALL_ATTENTION_FUNCTIONS")
+
     cfg = AutoConfig.from_pretrained(model_id, trust_remote_code=True)
     rs = getattr(cfg, "rope_scaling", None)
     if isinstance(rs, dict) and rs.get("rope_type", "default") == "default" \
