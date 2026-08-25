@@ -53,6 +53,30 @@ def _compat_config(model_id):
         return inv_freq, 1.0
     mru.ROPE_INIT_FUNCTIONS.setdefault("default", _default_rope)
 
+    # transformers 5.x renamed create_causal_mask(input_embeds=...) -> inputs_embeds and dropped
+    # cache_position; 4.5x-era remote code still passes the old kwargs. Wrap the functions
+    # BEFORE the remote modeling module is imported (it binds the names at import time).
+    import inspect
+    from transformers import masking_utils as mu
+    for name in ("create_causal_mask", "create_sliding_window_causal_mask"):
+        fn = getattr(mu, name, None)
+        if fn is None or getattr(fn, "_fr_compat", False):
+            continue
+        accepted = set(inspect.signature(fn).parameters)
+        if "input_embeds" in accepted:
+            continue  # old API, nothing to do
+
+        def _make(fn, accepted):
+            def wrapper(*args, **kwargs):
+                if "input_embeds" in kwargs and "inputs_embeds" not in kwargs:
+                    kwargs["inputs_embeds"] = kwargs.pop("input_embeds")
+                kwargs = {k: v for k, v in kwargs.items() if k in accepted}
+                return fn(*args, **kwargs)
+            wrapper._fr_compat = True
+            return wrapper
+        setattr(mu, name, _make(fn, accepted))
+    print("[compat] masking_utils kwargs shim installed")
+
     cfg = AutoConfig.from_pretrained(model_id, trust_remote_code=True)
     rs = getattr(cfg, "rope_scaling", None)
     if isinstance(rs, dict) and rs.get("rope_type", "default") == "default" \
