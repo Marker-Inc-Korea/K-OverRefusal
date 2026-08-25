@@ -36,6 +36,35 @@ def parse_args():
     return a
 
 
+def _compat_config(model_id):
+    """Remote-code checkpoints written for transformers 4.5x (e.g. NC AI VAETKI) break on
+    5.x in two places: ROPE_INIT_FUNCTIONS no longer has a 'default' entry, and a null
+    `rope_scaling` is normalised to {'rope_type': 'default', ...} which their code then
+    indexes for 'original_max_position_embeddings'. Restore both behaviours."""
+    import torch
+    from transformers import AutoConfig
+    from transformers import modeling_rope_utils as mru
+
+    def _default_rope(config, device=None, seq_len=None, layer_type=None):
+        base = getattr(config, "rope_theta", None) or (getattr(config, "rope_parameters", {}) or {}).get("rope_theta", 10000.0)
+        head_dim = getattr(config, "head_dim", None) or config.hidden_size // config.num_attention_heads
+        dim = int(head_dim * getattr(config, "partial_rotary_factor", 1.0))
+        inv_freq = 1.0 / (base ** (torch.arange(0, dim, 2, dtype=torch.int64).to(device=device, dtype=torch.float) / dim))
+        return inv_freq, 1.0
+    mru.ROPE_INIT_FUNCTIONS.setdefault("default", _default_rope)
+
+    cfg = AutoConfig.from_pretrained(model_id, trust_remote_code=True)
+    rs = getattr(cfg, "rope_scaling", None)
+    if isinstance(rs, dict) and rs.get("rope_type", "default") == "default" \
+            and "original_max_position_embeddings" not in rs:
+        try:
+            cfg.rope_scaling = None
+            print("[compat] rope_scaling normalised dict -> None (transformers 5.x shim)")
+        except Exception as e:
+            print(f"[compat] could not reset rope_scaling: {e}")
+    return cfg
+
+
 def main():
     args = parse_args()
     os.makedirs(args.save_dir, exist_ok=True)
@@ -45,14 +74,15 @@ def main():
     tok.padding_side = "left"
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
+    cfg = _compat_config(args.model)
     try:
         model = AutoModelForCausalLM.from_pretrained(
-            args.model, trust_remote_code=True, dtype=torch.bfloat16, device_map="cuda",
+            args.model, config=cfg, trust_remote_code=True, dtype=torch.bfloat16, device_map="cuda",
             attn_implementation=args.attn)
     except Exception as e:
         print(f"[warn] load with attn={args.attn} failed ({type(e).__name__}: {str(e)[:200]}); retrying eager")
         model = AutoModelForCausalLM.from_pretrained(
-            args.model, trust_remote_code=True, dtype=torch.bfloat16, device_map="cuda",
+            args.model, config=cfg, trust_remote_code=True, dtype=torch.bfloat16, device_map="cuda",
             attn_implementation="eager")
     model.eval()
     print(f"[info] loaded {args.model}: {type(model).__name__}, "
