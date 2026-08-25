@@ -15,7 +15,7 @@ FR_ROOT = Path(__file__).resolve().parents[1]
 if str(FR_ROOT) not in sys.path:
     sys.path.insert(0, str(FR_ROOT))
 
-from mllm import split_reasoning  # noqa: E402
+from eval.reasoning_utils import split_reasoning  # noqa: E402 (no vLLM dependency)
 
 
 def parse_args():
