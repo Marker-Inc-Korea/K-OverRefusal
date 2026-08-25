@@ -174,7 +174,9 @@ def main():
     for start in tqdm(range(0, len(order), args.batch_size), desc="HF inference"):
         idxs = order[start:start + args.batch_size]
         batch = [prompts[i] for i in idxs]
-        enc = tok(batch, return_tensors="pt", padding=True, add_special_tokens=False).to(model.device)
+        enc = tok(batch, return_tensors="pt", padding=True, add_special_tokens=False,
+                  return_token_type_ids=False).to(model.device)
+        enc.pop("token_type_ids", None)  # some tokenizers still emit it; generate() rejects unused kwargs
         with torch.inference_mode():
             gen = model.generate(**enc, max_new_tokens=args.max_new_tokens, do_sample=False,
                                  pad_token_id=tok.pad_token_id)
