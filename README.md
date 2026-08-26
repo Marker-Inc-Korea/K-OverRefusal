@@ -97,7 +97,7 @@ K-OverRefusal은 이런 false refusal을, 특히 **한국어 관용·문화 표�
 
 ## 평가 결과 (2026-08 갱신)
 
-`merged_dataset_v2` 485문항을 국내 개발 LLM 12종에 온도 0으로 추론하고 K-SafeGuard로 거부/응답을 판정한 결과입니다(behavior_acc 순).
+`merged_dataset_v2` 485문항을 국내 개발 LLM 13종에 온도 0으로 추론하고 K-SafeGuard로 거부/응답을 판정한 결과입니다(behavior_acc 순).
 하이브리드 사고 모델은 **non-thinking 모드**로 통일했고(사고 텍스트 혼입 시 판정이 왜곡됨), 72B는 단일 96GB GPU에 맞춰 FP8 동적 양자화했습니다.
 
 | 모델 | 개발사 | 공개 | 무해 정상응답률↑ | 유해 거부율↑ | behavior_acc↑ |
@@ -111,12 +111,14 @@ K-OverRefusal은 이런 false refusal을, 특히 **한국어 관용·문화 표�
 | Llama-VARCO-8B-Instruct | NCSOFT | 2024-09 | 0.368 | 0.883 | 0.687 |
 | Midm-2.0-Base-Instruct | KT | 2025-07 | 0.341 | 0.900 | 0.687 |
 | HyperCLOVAX-SEED-Text-Instruct-1.5B | NAVER | 2025-04 | 0.416 | 0.827 | 0.670 |
+| VAETKI-20B-A2B | NC AI | 2025-12 | 0.481 | 0.777 | 0.664 |
 | HyperCLOVAX-SEED-Think-32B | NAVER | 2025-12 | 0.130 | 0.957 | 0.641 |
 | solar-pro-preview-instruct | Upstage | 2024-09 | 0.438 | 0.753 | 0.633 |
 | YanoljaNEXT-EEVE-Instruct-10.8B | Yanolja | 2024-02 | 0.849 | 0.320 | 0.522 |
 
 - **EXAONE-4.5-33B**가 과잉거부·안전성 균형 1위, **A.X-4.0 72B**가 2위. 같은 계열에서 규모 확대(A.X-4.0-Light 7B→72B)는 유해 거부율을 올리지만 과잉거부는 그대로입니다.
 - 최신 모델이라고 과잉거부가 나아지지 않습니다 — **HyperCLOVAX-SEED-Think-32B**는 무해 요청의 87%를 거부(정상응답률 0.130). 사고(thinking) 모드를 켜면 0.454로 완화되지만 EXAONE-4.5는 반대로 악화(0.665→0.541)되어, 사고 모드의 효과는 모델마다 정반대입니다.
+- NC AI **VAETKI-20B-A2B**는 사고 모드를 끌 수 없고 greedy에서 응답 10.3%가 반복 루프로 절단돼(토큰 예산 2배 실험에서도 동일) 수치를 하한으로 읽어야 합니다.
 - 250B 이상 국산 소버린 모델(Solar-Open2·A.X-K2·K-EXAONE-2.0·Motif-3)은 양자화로도 단일 GPU를 초과해 미포함. 상세·카테고리별 수치는 [reports/merged_v2](reports/merged_v2/리포트.md).
 
 ## Moderation Tool
